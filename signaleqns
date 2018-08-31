@@ -38,9 +38,21 @@ def ssfpecho(t1,tr,angle,te, t2,m0=1.):
     q = e2*(e1-np.cos(alpha))
     r = (1-e2**2)/np.sqrt(p**2-q**2)
     signal = m0*np.tan(alpha/2)*(1-(1-np.cos(alpha)))
+    
     return signal
 
 def ssfpboth(t1,tr,angle,te,t2,m0=1.):
     echosig = ssfpecho(t1,tr,angle,te, t2,m0)
     fidsig = ssfpfid(t1,tr,angle,te, t2,m0)
     return echosig+fidsig
+    
+def Mxyss (t1, tr, t2, te, flipangle, phaseangle, domega=0.):
+    e1 = np.exp(-tr/t1)
+    e2 = np.exp(-tr/t2)
+    alpha = flipangle/180.*np.pi
+    theta = phaseangle/180.*np.pi+domega*tr
+    f1 = (1.-e1)*e2*sin(alpha)*sin(theta)
+    f2 = (1.-e1*cos(alpha))*(1-e2*cos(theta))-e2*(e1-cos(alpha))*(e2-cos(theta))
+    f3 = (1.-e1)*e2*sin(alpha)*(cos(theta)-e2)
+    f4 = (1.-e1*cos(alpha))*(1-e2*cos(theta))-e2*(e1-cos(alpha))*(e2-cos(theta))
+    return f1/f2, f3/f4, f1/f2+1j*f3/f4    
