@@ -5,6 +5,23 @@ Consolidation of MRI Databases
 
 Welcome to the mripy wiki!
 
+# 0D MRI
+
+## OpenSource MRI
+* Openmri.github.io/ocra
+* https://github.com/opencore     Opencore nmr
+* https://github.com/mtwieg/NMR/commits?author=mtwieg  Mtwieg github.com  
+medusa Stanford
+Gr-MRI
+Od1n
+Pulseq
+OCRA
+
+## MEG
+* https://github.com/mne-tools/mne-hcp
+
+
+
 
 # 1D MRI
 
@@ -32,6 +49,13 @@ Welcome to the mripy wiki!
 * http://www.drcmr.dk/bloch
 * https://github.com/jtamir/mri-sim-py/blob/master/epg/epg.py
 
+## Pulse Sequence Design
+* https://github.com/pulseq/pulseq
+* https://github.com/magland/sequencetree5
+* https://pulseq.github.io/
+* https://toppemri.github.io/
+* http://www.jemris.org/ug_command_line.html
+
 
 
 
@@ -47,6 +71,21 @@ Welcome to the mripy wiki!
 ## Non-Uniform FFT
 * https://github.com/dfm/python-nufft
 * https://github.com/jakevdp/nufftpy
+
+## Registration
+* https://pypi.org/project/imreg_dft/
+* https://simpleelastix.github.io/
+
+
+## Neuroimaging in Python
+* https://github.com/swederik/nipype
+* http://nipype.readthedocs.io/en/latest/devel/software_using_nipype.html
+
+## Susceptibility Mapping
+* https://github.com/lruthotto/QSMReconstruction.m
+* https://github.com/mathieuboudreau/qsm-tools
+* https://github.com/daiweis05/QITK
+
 
 
 
@@ -75,13 +114,57 @@ Welcome to the mripy wiki!
 ## fMRI and pupil size analysis
 * https://github.com/tknapen/FIRDeconvolution
 
+## Intracranial electrodes in MRI
+* https://github.com/kingjr/ecoggui
+
+
 
 # ND MRI
+
+## T1 T2 Shuffling
+* https://github.com/jtamir/t2shuffling-support
+
+## MR Fingerprinting
+* https://github.com/welcheb/Hamburg_MRF_workshop_VUMC_results
+* https://github.com/peng-cao/mripy
+* https://www.ismrm.org/mri_unbound/sequence.htm
+* https://bitbucket.org/asslaender/nyu_mrf_recon
+
+* https://github.com/Corey-Zumar/MRI-Reconstruction
+* https://github.com/StephanZheng/neural-fingerprinting
+
+
+## Connectome
+* https://www.nitrc.org/projects/cviewer/
+
+## Biobank
+* https://oai.epi-ucsf.org/datarelease/
+* http://www.ukbiobank.ac.uk/
+* http://cai2r.net/resources/software/one-hundred-knee-mri-cases
+
 
 ## Radiomics
 * https://github.com/Radiomics/pyradiomics
 * https://github.com/Radiomics/SlicerRadiomics
 * https://pypi.org/project/MedPy/
+
+
+
+## Machine learning
+* https://github.com/js3611/Deep-MRI-Reconstruction
+* https://github.com/Kamnitsask/deepmedic
+* Github.com/FlorianKnoll
+* Colah.github.io/post/2015-08-Backprop
+
+
+## General Machine Learning (not MRI)
+* https://github.com/KaimingHe/deep-residual-networks
+* https://github.com/ry/tensorflow-resnet
+* https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
+* https://github.com/DeepLearnPhysics/pytorch-resnet-example
+* https://github.com/alexjc/neural-enhance
+* https://github.com/david-gpu/srez
+* https://github.com/mriphysics
 
 # Radiofrequency and Electromagnetism
 
@@ -112,31 +195,15 @@ Welcome to the mripy wiki!
 
 
 
-## T1 T2 Shuffling
-* https://github.com/jtamir/t2shuffling-support
-
-## MR Fingerprinting
-* https://github.com/welcheb/Hamburg_MRF_workshop_VUMC_results
-* https://github.com/peng-cao/mripy
-* https://www.ismrm.org/mri_unbound/sequence.htm
-* https://bitbucket.org/asslaender/nyu_mrf_recon
-
-* https://github.com/Corey-Zumar/MRI-Reconstruction
-* https://github.com/StephanZheng/neural-fingerprinting
-
-
-
-
-## Registration
-* https://pypi.org/project/imreg_dft/
-* https://simpleelastix.github.io/
 
 
 
 
 
-## Intracranial electrodes in MRI
-* https://github.com/kingjr/ecoggui
+
+
+
+
 
 ## NI Learn for Brain Mapping
 * https://github.com/nilearn/nilearn
@@ -144,21 +211,6 @@ Welcome to the mripy wiki!
 * https://github.com/mwaskom/lyman
 
 
-## Susceptibility Mapping
-* https://github.com/lruthotto/QSMReconstruction.m
-* https://github.com/mathieuboudreau/qsm-tools
-* https://github.com/daiweis05/QITK
-
-## Neuroimaging in Python
-* https://github.com/swederik/nipype
-* http://nipype.readthedocs.io/en/latest/devel/software_using_nipype.html
-
-## Pulse Sequence Design
-* https://github.com/pulseq/pulseq
-* https://github.com/magland/sequencetree5
-* https://pulseq.github.io/
-* https://toppemri.github.io/
-* http://www.jemris.org/ug_command_line.html
 
 
 ## Compressed Sensing
@@ -180,42 +232,8 @@ BART
 http://gpilab.com/
 http://mridata.org/
 
-## Biobank
-* https://oai.epi-ucsf.org/datarelease/
-* http://www.ukbiobank.ac.uk/
-* http://cai2r.net/resources/software/one-hundred-knee-mri-cases
-
-## MEG
-* https://github.com/mne-tools/mne-hcp
-
-## Connectome
-* https://www.nitrc.org/projects/cviewer/
-
-## OpenSource MRI
-* Openmri.github.io/ocra
-* https://github.com/opencore     Opencore nmr
-* https://github.com/mtwieg/NMR/commits?author=mtwieg  Mtwieg github.com  
-medusa Stanford
-Gr-MRI
-Od1n
-Pulseq
-OCRA
-
-## Machine learning
-* https://github.com/js3611/Deep-MRI-Reconstruction
-* https://github.com/Kamnitsask/deepmedic
-* Github.com/FlorianKnoll
-* Colah.github.io/post/2015-08-Backprop
 
 
-## General Machine Learning (not MRI)
-* https://github.com/KaimingHe/deep-residual-networks
-* https://github.com/ry/tensorflow-resnet
-* https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
-* https://github.com/DeepLearnPhysics/pytorch-resnet-example
-* https://github.com/alexjc/neural-enhance
-* https://github.com/david-gpu/srez
-* https://github.com/mriphysics
 
 ## other
 
