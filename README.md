@@ -11,17 +11,20 @@ Welcome to the mripy wiki!
 * Openmri.github.io/ocra
 * https://github.com/opencore     Opencore nmr
 * https://github.com/mtwieg/NMR/commits?author=mtwieg  Mtwieg github.com  
+* http://od1n.sourceforge.net/
 medusa Stanford
 Gr-MRI
-Od1n
+
 Pulseq
 OCRA
 
 ## MEG
 * https://github.com/mne-tools/mne-hcp
 
-
-
+## Vendor Specific Support
+* https://spinsights.chem.agilent.com/login.jspa?referer=%252Findex.jspa
+* https://collaborate.mr.gehealthcare.com/
+* https://www.mr-idea.com/
 
 # 1D MRI
 
