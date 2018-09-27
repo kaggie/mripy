@@ -77,6 +77,7 @@ OCRA
 ## Registration
 * https://pypi.org/project/imreg_dft/
 * https://simpleelastix.github.io/
+* https://fsl.fmrib.ox.ac.uk/fsl/fslwiki
 
 
 ## Neuroimaging in Python
@@ -87,8 +88,7 @@ OCRA
 * https://github.com/lruthotto/QSMReconstruction.m
 * https://github.com/mathieuboudreau/qsm-tools
 * https://github.com/daiweis05/QITK
-
-
+* https://github.com/philgd/CVI-MRI
 
 ## Compressed Sensing
 * https://github.com/topics/compressed-sensing
@@ -102,6 +102,9 @@ OCRA
 
 * https://www.ismrm.org/MR-Hub/
 
+## Other
+
+* https://github.com/sammba-mri/sammba-mri
 
 
 
@@ -123,6 +126,7 @@ OCRA
 * https://www.nitrc.org/projects/noddi_toolbox
 * https://github.com/cbclab/MDT
 * https://github.com/NYU-DiffusionMRI/Diffusion-Kurtosis-Imaging
+* https://github.com/DiffusionMRITool/dmritool-MultiShellSampling
 
 ## CEST Sources
 * https://github.com/cest-sources/BM_sim_fit
