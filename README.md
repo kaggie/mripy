@@ -182,6 +182,7 @@ OCRA
 * https://github.com/nilearn/nilearn
 * https://github.com/WinawerLab
 * https://github.com/mwaskom/lyman
+* https://github.com/jlohmeier/atlasBREX
 
 
 ## Machine learning
