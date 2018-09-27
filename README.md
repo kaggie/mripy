@@ -6,27 +6,7 @@ Consolidation of MRI Databases
 Welcome to the mripy wiki!
 
 
-## Machine learning
-* https://github.com/js3611/Deep-MRI-Reconstruction
-* https://github.com/Kamnitsask/deepmedic
-* Github.com/FlorianKnoll
-* Colah.github.io/post/2015-08-Backprop
-
-
-## General Machine Learning (not MRI)
-* https://github.com/KaimingHe/deep-residual-networks
-* https://github.com/ry/tensorflow-resnet
-* https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
-* https://github.com/DeepLearnPhysics/pytorch-resnet-example
-* https://github.com/alexjc/neural-enhance
-* https://github.com/david-gpu/srez
-* https://github.com/mriphysics
-
-
-## Pulse design
-* https://github.com/ekgibbons/slr/blob/master/python/slr.py
-* https://github.com/LarsonLab/Spectral-Spatial-RF-Pulse-Design
-* https://scion.duhs.duke.edu/vespa/
+# 1D MRI
 
 ## Spectroscopy
 * https://scion.duhs.duke.edu/vespa/gamma
@@ -36,6 +16,46 @@ Welcome to the mripy wiki!
 * https://github.com/cni/MRS
 * https://github.com/jjhelmus/nmrglue
 
+## Pulse design
+* https://github.com/ekgibbons/slr/blob/master/python/slr.py
+* https://github.com/LarsonLab/Spectral-Spatial-RF-Pulse-Design
+* https://scion.duhs.duke.edu/vespa/
+
+## Bloch Equations
+* https://github.com/bretglun/BlochBuster
+* https://github.com/leoliuf/MRiLab
+* https://github.com/neji49/bloch-simulator-python
+* https://github.com/k7hoven/blochsimu
+* https://github.com/mriesch-tum/mbsolve
+* https://pypi.org/project/blochsimu/
+* http://qutip.org/download.html
+* http://www.drcmr.dk/bloch
+* https://github.com/jtamir/mri-sim-py/blob/master/epg/epg.py
+
+
+
+
+# 2D and 3D MRI
+
+## Image reconstruction
+* https://github.com/mrirecon/bart
+* https://github.com/gadgetron/gadgetron-python-ismrmrd-client
+* https://github.com/gadgetron/gadgetron
+* https://github.com/ismrmrd/ismrmrd-python
+* https://github.com/mikgroup/espirit-python
+
+## Non-Uniform FFT
+* https://github.com/dfm/python-nufft
+* https://github.com/jakevdp/nufftpy
+
+
+
+# 4D MRI
+
+## T1 and T2 Mapping
+* https://github.com/gattia/PyMap
+* https://github.com/gdurin/pyFitting
+* https://github.com/neuropoly/qMRLab
 
 
 ## Diffusion
@@ -49,12 +69,21 @@ Welcome to the mripy wiki!
 * https://github.com/cbclab/MDT
 * https://github.com/NYU-DiffusionMRI/Diffusion-Kurtosis-Imaging
 
+## CEST Sources
+* https://github.com/cest-sources/BM_sim_fit
 
+## fMRI and pupil size analysis
+* https://github.com/tknapen/FIRDeconvolution
+
+
+# ND MRI
 
 ## Radiomics
 * https://github.com/Radiomics/pyradiomics
 * https://github.com/Radiomics/SlicerRadiomics
 * https://pypi.org/project/MedPy/
+
+# Radiofrequency and Electromagnetism
 
 ## FDTD
 * https://github.com/stevengj/meep
@@ -62,13 +91,9 @@ Welcome to the mripy wiki!
 ## FDFD
 * http://www.mit.edu/~wsshin/maxwellfdfd.html
 
-
-## Image reconstruction
-* https://github.com/mrirecon/bart
-* https://github.com/gadgetron/gadgetron-python-ismrmrd-client
-* https://github.com/gadgetron/gadgetron
-* https://github.com/ismrmrd/ismrmrd-python
-* https://github.com/mikgroup/espirit-python
+## Finite Element
+* http://sfepy.org/doc-devel/index.html
+* https://github.com/AppliedMechanics-EAFIT/SolidsPy
 
 ## RF Coils
 * https://github.com/neuropoly/coil_simulation_web
@@ -78,28 +103,11 @@ Welcome to the mripy wiki!
 * https://github.com/adamkettinger/phase-optimization-for-VCC
 * https://github.com/thanospol/MARIE
 
-## Finite Element
-* http://sfepy.org/doc-devel/index.html
-* https://github.com/AppliedMechanics-EAFIT/SolidsPy
 
 
-## CEST Sources
-* https://github.com/cest-sources/BM_sim_fit
 
 ## SPGR
 * https://github.com/mezera/mrQ
-
-## Bloch Equations
-* https://github.com/bretglun/BlochBuster
-* https://github.com/leoliuf/MRiLab
-* https://github.com/neji49/bloch-simulator-python
-* https://github.com/k7hoven/blochsimu
-* https://github.com/mriesch-tum/mbsolve
-* https://pypi.org/project/blochsimu/
-* http://qutip.org/download.html
-* http://www.drcmr.dk/bloch
-* https://github.com/jtamir/mri-sim-py/blob/master/epg/epg.py
-
 
 
 
@@ -118,22 +126,14 @@ Welcome to the mripy wiki!
 
 
 
-## Non-Uniform FFT
-* https://github.com/dfm/python-nufft
-* https://github.com/jakevdp/nufftpy
 
 ## Registration
 * https://pypi.org/project/imreg_dft/
 * https://simpleelastix.github.io/
 
-## T1 and T2 Mapping
-* https://github.com/gattia/PyMap
-* https://github.com/gdurin/pyFitting
-* https://github.com/neuropoly/qMRLab
 
 
-## fMRI and pupil size analysis
-* https://github.com/tknapen/FIRDeconvolution
+
 
 ## Intracranial electrodes in MRI
 * https://github.com/kingjr/ecoggui
@@ -201,6 +201,23 @@ Od1n
 Pulseq
 OCRA
 
+## Machine learning
+* https://github.com/js3611/Deep-MRI-Reconstruction
+* https://github.com/Kamnitsask/deepmedic
+* Github.com/FlorianKnoll
+* Colah.github.io/post/2015-08-Backprop
+
+
+## General Machine Learning (not MRI)
+* https://github.com/KaimingHe/deep-residual-networks
+* https://github.com/ry/tensorflow-resnet
+* https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
+* https://github.com/DeepLearnPhysics/pytorch-resnet-example
+* https://github.com/alexjc/neural-enhance
+* https://github.com/david-gpu/srez
+* https://github.com/mriphysics
+
+## other
 
 
 dicom 2 stl
