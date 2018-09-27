@@ -59,6 +59,12 @@ OCRA
 ## SPGR
 * https://github.com/mezera/mrQ
 
+## Bruker
+* https://github.com/tesch1/BruKitchen
+* https://github.com/jdoepfert/brukerMRI
+* https://github.com/cmwalker/Bruker
+* https://github.com/jamesjcook/mat_recon_pipe
+* https://github.com/bennomeier/pyNMR
 
 
 # 2D and 3D MRI
