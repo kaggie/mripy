@@ -25,6 +25,7 @@ OCRA
 * https://spinsights.chem.agilent.com/login.jspa?referer=%252Findex.jspa
 * https://collaborate.mr.gehealthcare.com/
 * https://www.mr-idea.com/
+* https://www.bruker.com/service/information-communication/nmr-pulse-program-lib/bruker-user-library.html
 
 # 1D MRI
 
