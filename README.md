@@ -13,7 +13,7 @@ Welcome to the mripy wiki!
 * https://github.com/mtwieg/NMR/commits?author=mtwieg  Mtwieg github.com  
 * http://od1n.sourceforge.net/
 medusa Stanford
-Gr-MRI
+* http://www.opensourceimaging.org/project/gr-mri-a-software-package-for-magnetic-resonance-imaging-using-software-defined-radios/
 
 Pulseq
 OCRA
@@ -220,6 +220,7 @@ OCRA
 * https://github.com/usc-mrel/lowfieldsim
 * https://github.com/adamkettinger/phase-optimization-for-VCC
 * https://github.com/thanospol/MARIE
+* https://bitbucket.org/wgrissom/gnuradio-mri/src/master/
 
 
 
