@@ -137,6 +137,7 @@ OCRA
 * https://github.com/cbclab/MDT
 * https://github.com/NYU-DiffusionMRI/Diffusion-Kurtosis-Imaging
 * https://github.com/DiffusionMRITool/dmritool-MultiShellSampling
+* https://bitbucket.org/siawoosh/acid-artefact-correction-in-diffusion-mri/src/master/
 
 ## CEST Sources
 * https://github.com/cest-sources/BM_sim_fit
@@ -177,6 +178,8 @@ OCRA
 * https://github.com/Radiomics/pyradiomics
 * https://github.com/Radiomics/SlicerRadiomics
 * https://pypi.org/project/MedPy/
+### Knee
+* https://bitbucket.org/marcniethammer/ksrt/wiki/Home
 
 ## NI Learn for Brain Mapping
 * https://github.com/nilearn/nilearn
