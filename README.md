@@ -56,6 +56,8 @@ OCRA
 * https://toppemri.github.io/
 * http://www.jemris.org/ug_command_line.html
 
+## SPGR
+* https://github.com/mezera/mrQ
 
 
 
@@ -85,6 +87,20 @@ OCRA
 * https://github.com/lruthotto/QSMReconstruction.m
 * https://github.com/mathieuboudreau/qsm-tools
 * https://github.com/daiweis05/QITK
+
+
+
+## Compressed Sensing
+* https://github.com/topics/compressed-sensing
+
+
+## Spin echo
+* https://github.com/jyhmiinlin/cineFSE
+* https://github.com/jtamir/mri-sim-py/blob/master/epg/epg.py
+* http://mrsrl.stanford.edu/~brian/bloch/
+
+
+* https://www.ismrm.org/MR-Hub/
 
 
 
@@ -148,6 +164,10 @@ OCRA
 * https://github.com/Radiomics/SlicerRadiomics
 * https://pypi.org/project/MedPy/
 
+## NI Learn for Brain Mapping
+* https://github.com/nilearn/nilearn
+* https://github.com/WinawerLab
+* https://github.com/mwaskom/lyman
 
 
 ## Machine learning
@@ -189,8 +209,6 @@ OCRA
 
 
 
-## SPGR
-* https://github.com/mezera/mrQ
 
 
 
@@ -205,28 +223,11 @@ OCRA
 
 
 
-## NI Learn for Brain Mapping
-* https://github.com/nilearn/nilearn
-* https://github.com/WinawerLab
-* https://github.com/mwaskom/lyman
 
 
 
+#### Other (part a.0.0.0.0.0.0.1)
 
-## Compressed Sensing
-* https://github.com/topics/compressed-sensing
-
-
-## Spin echo
-* https://github.com/jyhmiinlin/cineFSE
-* https://github.com/jtamir/mri-sim-py/blob/master/epg/epg.py
-* http://mrsrl.stanford.edu/~brian/bloch/
-
-
-* https://www.ismrm.org/MR-Hub/
-* https://www.google.com/search?q=opensource+imaging&ie=utf-8&oe=utf-8&client=firefox-b-ab
-
-####
 https://web.eecs.umich.edu/~fessler/code/
 BART
 http://gpilab.com/
@@ -235,13 +236,8 @@ http://mridata.org/
 
 
 
-## other
+## Other (part a.0.0.0.0.0.0.2)
 
-
-dicom 2 stl
-https://github.com/dave3d/dicom2stl
-https://w.wol.ph/2015/07/10/rendering-stl-files-matplotlib-numpy-stl/
-numpy-stl
 
 
 https://gitlab.com/mariadeprez/irtk-public
