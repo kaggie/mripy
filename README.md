@@ -59,6 +59,7 @@ OCRA
 * https://pulseq.github.io/
 * https://toppemri.github.io/
 * http://www.jemris.org/ug_command_line.html
+* https://github.com/wgrissom/ISMRM-RF-Pulse-Design-Challenge
 
 ## SPGR
 * https://github.com/mezera/mrQ
@@ -97,6 +98,7 @@ OCRA
 
 ## Susceptibility Mapping
 * https://github.com/lruthotto/QSMReconstruction.m
+* https://github.com/sunhongfu/QSM
 * https://github.com/mathieuboudreau/qsm-tools
 * https://github.com/daiweis05/QITK
 * https://github.com/philgd/CVI-MRI
