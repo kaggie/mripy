@@ -36,6 +36,7 @@ OCRA
 * https://github.com/cni/MRS
 * https://github.com/jjhelmus/nmrglue
 * https://github.com/LarsonLab/hyperpolarized-mri-toolbox
+* http://hugadams.github.io/scikit-spectra/
 
 ## Pulse design
 * https://github.com/ekgibbons/slr/blob/master/python/slr.py
@@ -238,7 +239,10 @@ OCRA
 * https://opensource.ncsa.illinois.edu/bitbucket/projects/CATS/repos/extractors-mri/browse/mri2mesh
 
 
+# Other Modalities
 
+## Xray
+* https://github.com/pydata/xarray
 
 
 
