@@ -84,6 +84,7 @@ OCRA
 ## Non-Uniform FFT
 * https://github.com/dfm/python-nufft
 * https://github.com/jakevdp/nufftpy
+* https://github.com/cea-cosmic/pysap
 
 ## Registration
 * https://pypi.org/project/imreg_dft/
