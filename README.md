@@ -36,6 +36,7 @@ OCRA
 * https://github.com/SIVICLab/sivic
 * https://github.com/cni/MRS
 * https://github.com/jjhelmus/nmrglue
+* https://github.com/LarsonLab/hyperpolarized-mri-toolbox
 
 ## Pulse design
 * https://github.com/ekgibbons/slr/blob/master/python/slr.py
@@ -137,7 +138,8 @@ OCRA
 * https://github.com/cbclab/MDT
 * https://github.com/NYU-DiffusionMRI/Diffusion-Kurtosis-Imaging
 * https://github.com/DiffusionMRITool/dmritool-MultiShellSampling
-* https://bitbucket.org/siawoosh/acid-artefact-correction-in-diffusion-mri/src/master/
+* https://bitbucket.org/siawoosh/acid-artefact-correction-in-diffusion-mri/
+
 
 ## CEST Sources
 * https://github.com/cest-sources/BM_sim_fit
@@ -225,6 +227,9 @@ OCRA
 * https://github.com/thanospol/MARIE
 * https://bitbucket.org/wgrissom/gnuradio-mri/src/master/
 
+## Gradient Coils
+* https://github.com/gBringout/CoilDesign
+
 ## Mesh Extraction
 * https://opensource.ncsa.illinois.edu/bitbucket/projects/CATS/repos/extractors-mri/browse/mri2mesh
 
@@ -259,6 +264,7 @@ http://mridata.org/
 ## Other (part a.0.0.0.0.0.0.2)
 
 
+http://people.eecs.berkeley.edu/~mlustig/Software.html
 
 https://gitlab.com/mariadeprez/irtk-public
 
