@@ -3,6 +3,51 @@
 
 import numpy as np
 
+
+
+def sitkregister(regim, otherim,register_type = 'affine',parent=None,return_param_map=False,param_map = None):
+    #newimage,self.sitk_param_map = sitkregister(im1, im2,register_type = 'repeat',param_map = self.sitk_param_map, parent=self.parent,return_param_map=True)
+    import SimpleITK as sitk
+    print regim.shape,' regimshape'
+    import SimpleITK as sitk
+    print regim.shape,' regimshape'
+    fixedImage = sitk.GetImageFromArray(regim)
+    movingImage = sitk.GetImageFromArray(otherim)
+    elastixImageFilter = sitk.ElastixImageFilter()
+    if register_type != 'repeat':
+        parameterMap = sitk.GetDefaultParameterMap(register_type) #'translation'
+        #parameterMap1 = sitk.GetDefaultParameterMap('affine') #'translation'
+        #parameterMap.append(sitk.GetDefaultParameterMaprigid') #'translation'
+        #composite_transform = sitk.Transform(parame('translation'))
+        #parameterMap = sitk.GetDefaultParameterMap('nonterMap0)
+        #composite_transform.AddTransform(parameterMap1)
+        elastixImageFilter.SetFixedImage(fixedImage)
+        elastixImageFilter.SetMovingImage([movingImage, movingImage, movingImage, movingImage])
+        elastixImageFilter.SetParameterMap(parameterMap)
+        elastixImageFilter.Execute()
+    else:
+        #parameterMap = sitk.GetDefaultParameterMap('translation')
+        #elastixImageFilter.SetParameterMap(param_map)
+        #
+        elastixImageFilter = param_map
+        elastixImageFilter.SetMovingImage(movingImage)
+        #elastixImageFilter.SetFixedImage(fixedImage)
+        elastixImageFilter.Execute()
+    transformParameterMap = elastixImageFilter.GetTransformParameterMap()
+    resultImage = elastixImageFilter.GetResultImage()
+    if parent != None:
+        parent.sitkdata = resultImage
+    if return_param_map:
+        return sitk.GetArrayFromImage(resultImage), elastixImageFilter # transformParameterMap
+    return sitk.GetArrayFromImage(resultImage)
+    sitkdata = sitk.GetImageFromArray(resultImage)
+    try:
+        return sitk.GetImageFromArray(resultImage)
+    except:
+        return resultImage, transformParameterMap
+
+
+
 class gradient_class():
     def __init__(self,k=np.array(10)):
         self.k = k
