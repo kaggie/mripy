@@ -27,6 +27,16 @@ class gradient_class():
         gradnew[grad<-gradmax] = -gradmax
         self.gradient = gradnew
         return gradnew
+    def ramp(vstart=0, vend = 1, vmax = .2,vdotmax=.2):
+        # v could be gradient, or kspace.
+        # vdot means the derivative of v, like slew rate or gradient
+        vdiff = vend - vstart
+        nvt = vdiff/vdotmax
+        vdots = np.arange(nvt)*vdotmax        
+        v = np.cumsum(vdots)    
+        v[v>vmax] = vmax
+        vsum = np.cumsum(v)
+        return v, vdots, vsum #, k, slew    
             
 def ernst(t1=0,tr=0,alpha=0,alpharad = 0):
     varA = -1
