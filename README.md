@@ -14,8 +14,7 @@ Welcome to the mripy wiki!
 * http://od1n.sourceforge.net/
 medusa Stanford
 * http://www.opensourceimaging.org/project/gr-mri-a-software-package-for-magnetic-resonance-imaging-using-software-defined-radios/
-
-Pulseq
+* https://imr-framework.github.io/ (Pulseq)
 OCRA
 
 ## MEG
