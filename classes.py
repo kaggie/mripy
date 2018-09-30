@@ -186,7 +186,7 @@ class multinuclear():
 
 class dicom_dirs:
     'create a list of all files within a directory \n level=1 is just the top directory'
-    def __init__(self, level=1,path='/home/jk636/c/PACS/dl_20150703_153721793/',  exten='*dcm', MessageBox = None,showupdatefunc=None, updatefunc = None):
+    def __init__(self, level=1,path='~',  exten='*dcm', MessageBox = None,showupdatefunc=None, updatefunc = None):
         'create a list of all files within a directory \n level=1 is just the top directory'\
         'to be usable the function update_protocolnames() must be run'\
         'example: \n hey = dicom_dirs(4); hey.update_protocolnames(); print hey.unique_protocol_names(); print hey.unique_patient_names; hey._savedata()'
@@ -263,7 +263,7 @@ class dicom_dirs:
     def strip_filepath(self, filename):
         path = '/'.join(filename.split('/')[:-1])+'/'
         return path
-    def get_filenames_dir(self,path='/media/jk636/c304fcc8-e784-4907-a93d-271ab456c489/DICOMG/PA0'):
+    def get_filenames_dir(self,path='~'):
         import glob
         all_files = []
         DicomExtens = ['MR.*','CT.*','*IMA','s0*i*','*MRDC*','*dcm*','*DCM*','z*','*IM0*','0*0*','1.3*','CT.*','IM*']
@@ -369,35 +369,6 @@ class dicom_dirs:
                     dicom_data = dicom.read_file(self.allfiles[xi],stop_before_pixels=True)
                     times[xi]=dicom_data.EchoTime
 
-                    '''(0019, 10a7) [User data 0]                       OB: '1.000000'
-                    (0019, 10a8) [User data 1]                       OB: '4.000000'
-                    (0019, 10a9) [User data 2]                       OB: '500.000000'
-                    (0019, 10aa) [User data 3]                       OB: '0.000000'
-                    (0019, 10ab) [User data 4]                       OB: '0.000000'
-                    (0019, 10ac) [User data 5]                       OB: '0.000000'
-                    (0019, 10ad) [User data 6]                       OB: '1.000000'
-                    (0019, 10ae) [User data 7]                       OB: '10.000000 '
-                    (0019, 10af) [User data 8]                       OB: '30.000000 '
-                    (0019, 10b0) [User data 9]                       OB: '50.000000 '
-                    (0019, 10b1) [User data 10]                      OB: '1.000000'
-                    (0019, 10b2) [User data 11]                      OB: '1.000000'
-                    (0019, 10b3) [User data 12]                      OB: '1.000000'''
-            else:
-                Userdata0 = float(dicomfiledata[0x0019,0x10a7].value) # T1rho, T2
-                Userdata1 = float(dicomfiledata[0x0019,0x10a8].value) # num averages
-                Userdata2 = float(dicomfiledata[0x0019,0x10a9].value) # Btsl freq
-                Userdata3 = float(dicomfiledata[0x0019,0x10aa].value)
-                Userdata4 = float(dicomfiledata[0x0019,0x10ab].value)
-                Userdata5 = float(dicomfiledata[0x0019,0x10ac].value)
-                Userdata6 = float(dicomfiledata[0x0019,0x10ad].value) # TSL 1
-                Userdata7 = float(dicomfiledata[0x0019,0x10ae].value) # TSL 2
-                Userdata8 = float(dicomfiledata[0x0019,0x10af].value) # TSL 3
-                Userdata9 = float(dicomfiledata[0x0019,0x10b0].value) # TSL 4
-                Userdata10 = float(dicomfiledata[0x0019,0x10b1].value) # TSL 5
-                Userdata11 = float(dicomfiledata[0x0019,0x10b2].value) # TSL 6
-                Userdata12 = float(dicomfiledata[0x0019,0x10b3].value) # TSL 7
-                times = [Userdata6, Userdata7, Userdata8, Userdata9, Userdata10, Userdata11]
-                times = times[:int(Userdata1)]      
     def get_imdata(self,protocol_pattern = None):
         try:
             self.get_TEs()
