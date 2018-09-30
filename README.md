@@ -128,6 +128,8 @@ OCRA
 * https://github.com/gdurin/pyFitting
 * https://github.com/neuropoly/qMRLab
 
+## DCE
+* https://github.com/welcheb/pydcemri
 
 ## Diffusion
 * https://github.com/flohorovicic/pynoddy
