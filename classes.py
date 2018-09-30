@@ -180,3 +180,357 @@ class multinuclear():
 
         alldata = sep(gyros)
         
+
+        
+        
+
+class dicom_dirs:
+    'create a list of all files within a directory \n level=1 is just the top directory'
+    def __init__(self, level=1,path='/home/jk636/c/PACS/dl_20150703_153721793/',  exten='*dcm', MessageBox = None,showupdatefunc=None, updatefunc = None):
+        'create a list of all files within a directory \n level=1 is just the top directory'\
+        'to be usable the function update_protocolnames() must be run'\
+        'example: \n hey = dicom_dirs(4); hey.update_protocolnames(); print hey.unique_protocol_names(); print hey.unique_patient_names; hey._savedata()'
+        if path=='':
+            try:
+                self.path = tkFileDialog.askdirectory()
+            except:
+                pass
+        self.MessageBox = MessageBox
+        self.path = path
+        self.showupdatefunc = updatefunc
+        self.level = level
+        self.exten=exten
+        self._listdir()
+        self.ProtocolNames = []
+        self.PatientNames = []
+        self.AccessionNumbers = []
+        self.SeriesNumber = []
+        self.TEs = []
+        self.EchoTimes = []
+        self.TRs = []
+        self.TSLs = []
+        self.FlipAngles = []
+        self.MagPhases = []
+        self.ScanTimes = []
+    def _removematfiles(self):
+        newallfiles = []
+        for checkedfile in self.allfiles:
+            if checkedfile[-4:]  != '.mat':
+        for checkedfile in self.allfiles:
+            if checkedfile[-4:]  != '.mat':
+                newallfiles.append(checkedfile)
+        self.allfiles = newallfiles
+    def _listdir(self,level=-1):
+        if (level!=-1):
+            self.level=level
+        self.allfiles = []
+        for xi in range(self.level):
+            self.allfiles.extend(self._listfiles(xi+1))
+    def _listfiles( self,templevel):
+        path = self.path
+        try:
+            if path[-1]=='/':
+                path=path[0:-1]
+            addpath = '/'
+            for xi in range(0,templevel-1):
+                addpath = addpath + '*/'
+        except:
+            pass
+        filelist = sorted(glob.glob(path+addpath+self.exten))
+
+        return filelist
+    def getfile(self,filename='',filetypes=[('image', '.mat')],defaultextension = '.mat', title='Open File:',\
+        filetypesQT = 'Matlab .mat (*.MAT *.mat *.fig *.FIG);;Dicom .IMA (*.IMA);;Raw .dat (*.dat);;All Files (*)',useQT = False ):
+        print filename
+        #print useQT
+        if filename == '' and useQT == True:
+            filename = str(pg.Qt.QtGui.QFileDialog.getOpenFileName(None, title,defpath,filetypesQT))
+            #dlg = QtGui.QFileDialog()
+            #dlg.setWindowTitle(title)
+            #dlg.setNameFilters(filetypesQT)
+            #dlg.setViewMode(QtGui.QFileDialog.Detail)
+            #dlg.exec_()
+            #filename = str(dlg.selectedFiles()[0])
+
+            if filename=='':
+                return ''
+            self.defaultpath = self.strip_filepath(filename)
+        elif filename == '':
+            filename = tkFileDialog.askopenfilename(initialdir=self.defaultpath,defaultextension=defaultextension, filetypes=filetypes, title = title)
+            if len(filename)>0:
+                self.defaultpath = self.strip_filepath(filename)
+        return filename
+    def strip_filepath(self, filename):
+        path = '/'.join(filename.split('/')[:-1])+'/'
+        return path
+    def get_filenames_dir(self,path='/media/jk636/c304fcc8-e784-4907-a93d-271ab456c489/DICOMG/PA0'):
+        import glob
+        all_files = []
+        DicomExtens = ['MR.*','CT.*','*IMA','s0*i*','*MRDC*','*dcm*','*DCM*','z*','*IM0*','0*0*','1.3*','CT.*','IM*']
+        for exten in DicomExtens:
+            all_files = all_files+glob.glob(path+exten)
+            all_files = all_files+glob.glob(path+'*/'+exten)
+            all_files = all_files+glob.glob(path+'*/*/'+exten)
+            all_files = all_files+glob.glob(path+'*/*/*/'+exten)
+        self.allfiles = all_files
+    def update_protocolnames(self, DISPLAY_DONE=True):
+        percentage = .1
+        for xi in range(len(self.allfiles)):
+            if xi>=len(self.allfiles): #have to check numbers do to removing false directories
+                break
+            try:              
+                break
+            try:
+                if self.allfiles[xi][-7:] == 'MR.1.2.' or self.allfiles[xi][-5:] == 'MR.1.' or self.allfiles[xi][-6:] == 'MR.1.2' or self.allfiles[xi][-3:] == 'MR.':
+                    self.allfiles.remove(self.allfiles[xi])
+            except:
+                print xi, len(self.allfiles)
+                print self.allfiles[xi]
+            try:
+                dicominfo = dicom.read_file(self.allfiles[xi],stop_before_pixels=True)
+            except:
+                print self.allfiles[xi]
+                continue
+                pass
+            if not hasattr(dicominfo, 'ProtocolName'):
+                dicominfo.ProtocolName = ''
+            if int(dicominfo.SeriesNumber)>99:
+                self.ProtocolNames.append(str(dicominfo.SeriesNumber) + ' ' + str(dicominfo.ProtocolName)+' ' + str(dicominfo.SeriesDescription))
+            elif int(dicominfo.SeriesNumber)>9:
+                self.ProtocolNames.append('0' + str(dicominfo.SeriesNumber) + ' ' + str(dicominfo.ProtocolName)+' ' + str(dicominfo.SeriesDescription))
+            else:
+                self.ProtocolNames.append('00'+ str(dicominfo.SeriesNumber) + ' ' + str(dicominfo.ProtocolName)+' ' + str(dicominfo.SeriesDescription))
+            self.PatientNames.append(str(dicominfo.PatientsName) + ' ' + str(dicominfo.AccessionNumber))
+            #print dicominfo.AccessionNumber
+            self.AccessionNumbers.append(dicominfo.AccessionNumber)
+            self.SeriesNumber.append(dicominfo.SeriesNumber)
+            self.ScanTimes.append(dicominfo.StudyDate)
+            try:
+                self.MagPhases.append(ord(dicominfo[0x0043,0x102f].value))
+            except:
+                pass
+            try:
+                self.EchoTimes.append((dicominfo.EchoTime))
+            except:
+                pass
+            try:
+                self.TRs.append((dicominfo.RepetitionTime))
+            except:
+                pass
+            try:
+                self.FlipAngles.append((dicominfo.FlipAngle))
+            except:
+                pass
+            if DISPLAY_DONE:
+                if(xi/len(self.allfiles) >= percentage):
+                    if MessageBox != None:
+                        self.MessageBox( str(xi/len(self.allfiles)*100 //1) + '% done')
+                        percentage +=.1
+                    else:
+                        print str(xi/len(self.allfiles)*100 //1) + '% done'
+                        percentage +=.1
+        self.nonunique_len()
+    def nonunique_len(self):
+        print len(self.unique_TRs())
+        print len(self.unique_TEs())
+        print len(self.unique_MagPhases())
+        print len(self.unique_FlipAngles())  ##should check if all above 0
+        self.nuN = len(self.unique_TRs())*len(self.unique_TEs())*len(self.unique_FlipAngles())
+    def unique_TRs(self):
+        'lists all the unique TRs'
+        return sorted(list(set(self.TRs)))
+    def unique_ScanTimes(self):
+        return sorted(list(set(self.ScanTimes)))
+    def unique_TEs(self):
+        'lists all the unique TEs'
+        return sorted(list(set(self.EchoTimes)))
+    def unique_MagPhases(self):
+        'lists all the unique Mag/Phases'
+        return sorted(list(set(self.MagPhases)))
+    def unique_protocol_names(self):
+        'lists all the unique Protocol names'
+        return sorted(list(set(self.ProtocolNames)))
+    def unique_patient_names(self):
+        'lists all the unique Protocol names'
+        return sorted(list(set(self.PatientNames)))
+    def unique_accession_numbers(self):
+        'lists all the unique Protocol names'
+        return sorted(list(set(self.AccessionNumbers)))
+    def unique_series_numbers(self):
+        'lists all the unique Protocol names'
+        return sorted(list(set(self.SeriesNumber)))
+    def get_TEs(self):
+        times = np.zeros(len(self.allfiles))
+        dicomfiledata = dicom.read_file(self.allfiles[0])
+
+        if [0x0019, 0x10a9] in dicomfiledata.keys():
+            if not dicomfiledata[0x0019, 0x10a9].value == '500.000000':
+                for xi in xrange(len(self.allfiles)):
+                    dicom_data = dicom.read_file(self.allfiles[xi],stop_before_pixels=True)
+                    times[xi]=dicom_data.EchoTime
+
+                    '''(0019, 10a7) [User data 0]                       OB: '1.000000'
+                    (0019, 10a8) [User data 1]                       OB: '4.000000'
+                    (0019, 10a9) [User data 2]                       OB: '500.000000'
+                    (0019, 10aa) [User data 3]                       OB: '0.000000'
+                    (0019, 10ab) [User data 4]                       OB: '0.000000'
+                    (0019, 10ac) [User data 5]                       OB: '0.000000'
+                    (0019, 10ad) [User data 6]                       OB: '1.000000'
+                    (0019, 10ae) [User data 7]                       OB: '10.000000 '
+                    (0019, 10af) [User data 8]                       OB: '30.000000 '
+                    (0019, 10b0) [User data 9]                       OB: '50.000000 '
+                    (0019, 10b1) [User data 10]                      OB: '1.000000'
+                    (0019, 10b2) [User data 11]                      OB: '1.000000'
+                    (0019, 10b3) [User data 12]                      OB: '1.000000'''
+            else:
+                Userdata0 = float(dicomfiledata[0x0019,0x10a7].value) # T1rho, T2
+                Userdata1 = float(dicomfiledata[0x0019,0x10a8].value) # num averages
+                Userdata2 = float(dicomfiledata[0x0019,0x10a9].value) # Btsl freq
+                Userdata3 = float(dicomfiledata[0x0019,0x10aa].value)
+                Userdata4 = float(dicomfiledata[0x0019,0x10ab].value)
+                Userdata5 = float(dicomfiledata[0x0019,0x10ac].value)
+                Userdata6 = float(dicomfiledata[0x0019,0x10ad].value) # TSL 1
+                Userdata7 = float(dicomfiledata[0x0019,0x10ae].value) # TSL 2
+                Userdata8 = float(dicomfiledata[0x0019,0x10af].value) # TSL 3
+                Userdata9 = float(dicomfiledata[0x0019,0x10b0].value) # TSL 4
+                Userdata10 = float(dicomfiledata[0x0019,0x10b1].value) # TSL 5
+                Userdata11 = float(dicomfiledata[0x0019,0x10b2].value) # TSL 6
+                Userdata12 = float(dicomfiledata[0x0019,0x10b3].value) # TSL 7
+                times = [Userdata6, Userdata7, Userdata8, Userdata9, Userdata10, Userdata11]
+                times = times[:int(Userdata1)]      
+    def get_imdata(self,protocol_pattern = None):
+        try:
+            self.get_TEs()
+        except:
+            print 'no echo times in dicom'
+        imagedata = []
+        all_files = self.allfiles
+        if protocol_pattern != None:
+            all_files = self.return_protocol_pattern(protocol_pattern)[0]
+        old_dicominfo = dicom.read_file(all_files[0])
+        imagedata2 = []
+        files_im1 = []
+        files_im2 = []
+        init_row = old_dicominfo.Rows
+        init_col = old_dicominfo.Columns
+        instancenums = []
+        SOPnums = []
+
+        files = sorted(self.remove_file_copies(all_files))
+        print "Reading files.."
+        for xi in xrange(len(files)):
+            filei = files[xi]
+            if (np.double(xi)/10 % 1)==0:
+                print str(xi)+ ' / ' + str(len(files))+ ' loaded'
+            dicominfo = dicom.read_file(filei)
+
+            instancenums.append(int(dicominfo.InstanceNumber)-1)
+            try:
+                SOPid = dicominfo.SOPInstanceUID[-8:] # get the last few digits in the SOP id
+                SOPid = SOPid[SOPid.find('.')-3:]
+                SOPnums.append(float(SOPid))
+            except:
+                SOPnums.append(int(dicominfo.InstanceNumber)-1)
+
+            imagebuffer =np.fromstring(dicominfo.PixelData, dtype=np.int16)
+            imagebuffer2 = imagebuffer.reshape([dicominfo.Rows, dicominfo.Columns]).T
+            if dicominfo.Rows != init_row or dicominfo.Columns != init_col:
+                imagedata2.append(imagebuffer2)
+                files_im2.append(filei)
+            else:
+                imagedata.append(imagebuffer2)
+                files_im1.append(filei)
+            old_dicominfo = dicominfo
+
+        files_im1 = files_im1
+        files_im2 = files_im2                
+        self.im1 = np.squeeze(imagedata)
+        self.im2 = np.squeeze(imagedata2)
+        self.instance_nums = instancenums
+        self.SOP_nums = SOPnums
+
+        return
+
+        init_row = old_dicominfo.Rows
+        init_col = old_dicominfo.Columns
+
+        files = self.remove_file_copies(dummydcm.allfiles)
+        files = sorted(files)
+
+        self.mprint("Reading files..")
+        instancenums = []
+        SOPnums = []
+        def is_odd_filei(num,index=-5):
+            num = int(num[index:].replace('.','0'))
+            return num & 0x1
+        for xi in xrange(len(files)):
+            filei = files[xi]
+            if (np.double(xi)/10 % 1)==0:
+                self.mprint(str(xi)+ ' / ' + str(len(files))+ ' loaded')
+            dicominfo = dicom.read_file(filei.rstrip())
+            instancenums.append(int(dicominfo.InstanceNumber)-1)
+            try:
+                SOPid = dicominfo.SOPInstanceUID[-8:] # get the last few digits in the SOP id
+                SOPid = SOPid[SOPid.find('.')-3:]
+                SOPnums.append(float(SOPid))
+            except:
+                SOPnums.append(int(dicominfo.InstanceNumber)-1)
+            #instancenums.append(int(dicominfo.SOPInstanceUID)-1)
+            imagebuffer =np.fromstring(dicominfo.PixelData, dtype=np.int16)
+            imagebuffer2 = imagebuffer.reshape([dicominfo.Rows, dicominfo.Columns]).T
+            if LoadSpecial:
+                imagebuffer2,flag = self.LoadSpecial(imdata=imagebuffer2)
+                if flag == 'Empty':
+                    continue
+
+            if LoadSpecial2:
+                flag2 =  is_odd_filei(filei)
+                '''if flag2 == 1:
+                    is_odd_filei
+                    flag2 = 2
+                else:
+                    flag2 = 1'''
+            if dicominfo.Rows != init_row or dicominfo.Columns != init_col or flag=='Phase' or flag2==1:
+                imagedata2.append(imagebuffer2)
+                files_im2.append(filei)
+            else:
+                imagedata.append(imagebuffer2)
+                files_im1.append(filei)
+            old_dicominfo = dicominfo
+        #self.scanparams['DICOM'] = dicominfo
+        self.metadata = dicominfo
+        self.setmeta_scanparams_dicom(dicominfo = dicominfo)
+
+        self.mprint('Updating the image ')
+        #reorder, because sometimes dicoms are named funny
+        newimagedata = []
+        newfiles = []
+        newimagedata = []
+        newfiles = []
+        newfiles_im1 = []
+        imdata_sorted = np.zeros(np.shape(imagedata))
+        sortedxi = np.argsort(SOPnums)
+        newfiles = []
+        newfiles_im1 = []
+        newimagedata = []
+        method1 = False
+        if method1 == True:
+            for xi in xrange(len(sortedxi)):
+                posi = sortedxi[xi]
+                imdata_sorted[xi] = imagedata[posi]
+                newimagedata.append(imagedata[posi])
+                newfiles.append(files[posi])
+                newfiles_im1.append(files_im1[posi])
+        else:
+
+            #original method, was in order but left data out
+            for xi in xrange(len(instancenums)):
+                try:
+                    posi = instancenums.index(xi)
+                    SOPid = SOPnums[xi]
+                    #print posi, SOPid
+                    newimagedata.append(imagedata[posi])
+                    newfiles.append(files[posi])
+                    newfiles_im1.append(files_im1[posi])
+                except:
+                    self.mprint('Is ' + str(xi) + ' in list?')        
