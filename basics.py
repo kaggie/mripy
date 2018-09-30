@@ -34,7 +34,7 @@ def ernst(t1=0,tr=0,alpha=0,alpharad = 0):
             alpharad = alpha*np.pi/180
         varA = -tr/np.log(np.cos(alpharad))
     else:
-        print 'not enough defined values to calculate!'
+        print('not enough defined values to calculate!')
     return varA
             
             
@@ -179,9 +179,7 @@ def sos_image(imSpace, coilpos = 3,useabs=True):
 
 def combined_image(imspace, TE = [2.69, 5.86],coilpos=2):
     phaseimage = combined_phasemap(imspace,TE)
-    print phaseimage.shape
     sosimage = sos_image(imspace,coilpos)
-    print sosimage.shape
     return sosimage*np.exp(1j*phaseimage)
     
     
@@ -286,9 +284,7 @@ def dixon2dicom(TE1=4.7, TE2=5.75, TE3=6.8, filename1='', filename2='', filename
     water = water[64:192]
     fatdicomclass = vol2dicom(fliplr(r(fat)),justdoit=False,reducebyroi=False,studytype='fat')
     fatdicomclass.defpath = path1
-    dicomfilename =  _checkloadfilename(initialdir=fatdicomclass.defpath, title='Open Example Dicom Fi
-le',filetypes=[('Dicom', '.IMA'),('all','')])
-    print fatdicomclass.defpath
+    dicomfilename =  _checkloadfilename(initialdir=fatdicomclass.defpath, title='Open Example Dicom File',filetypes=[('Dicom', '.IMA'),('all','')])
     fatdicomclass.getdicom(dicomfilename[0])
     savefatas = _checksavefilename(initialdir=fatdicomclass.defpath,title='Save Fat Dicoms as')
     fatdicomclass.dicominfo.ProtocolName = '3 Point Dixon - Fat'
@@ -327,8 +323,7 @@ def dixon(acq1,acq2,acq3,teinc1,teinc2):
       acq1 = np.array(np.array(acq1))
       acq2 = np.array(np.array(acq2))
       acq3 = np.array(np.array(acq3))
-      #b0 = np.angle(acq3 / acq1) * 1000 / teinc2 / (2*np.pi);  #doesn't use gammabar, as it cancels o
-ut in D
+      #b0 = np.angle(acq3 / acq1) * 1000 / teinc2 / (2*np.pi);  #doesn't use gammabar, as it cancels out in D
       fat = 0;
       water = 0;
       B = np.exp(1j*freqshift*teinc1*1e-3*2*np.pi);
@@ -408,22 +403,16 @@ def fit_loop_nocoils(imspace, TEs, which='fexp'):
     "imspace[x, y, TE, coil"
     yi = 0; ci = 0; ai = 0;xi=0;
     imspace = np.abs(imspace)
-    #print 'what'
     li = np.array(imspace).shape
-    #print 'hey'
-   # li[4] = 1 #average number, unneeded
     llength = (li[0],li[1])
     Aarray = np.zeros((llength))
     Barray = np.zeros((llength))
     print Aarray.shape
     print Barray.shape
     for ci in xrange(0, (imspace.shape)[3]):
-        print li[3]-ci, li[1]-yi, li[0]-xi, ai
-        #print length(imspace)
+        print( li[3]-ci, li[1]-yi, li[0]-xi, ai)
         for yi in range(0, (imspace.shape)[1]):
-            print li[3]-ci, li[1]-yi, li[0]-xi, ai,
-            #print ci, yi, xi, ai
-            #print imspace.shape
+            print( li[3]-ci, li[1]-yi, li[0]-xi, ai,)
             for xi in xrange(0, (imspace.shape)[0]):
                 #print imspace.shape
                 if 1:
@@ -536,7 +525,7 @@ def basicregrid(data, ktrajs,divideby=256 , resolution=[64.,64.,64.], method='ne
         regridded = griddata(points,data,(meshx,meshy,meshz),method=method)
     else:
         regridded = -1
-        print "shapes are different"
+        print( "shapes are different")
     return regridded
 
 
