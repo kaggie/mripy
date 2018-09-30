@@ -174,6 +174,7 @@ OCRA
 
 ## Connectome
 * https://www.nitrc.org/projects/cviewer/
+* https://github.com/dPys/PyNets
 
 ## Biobank
 * https://oai.epi-ucsf.org/datarelease/
