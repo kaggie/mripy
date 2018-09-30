@@ -36,7 +36,9 @@ class gradient_class():
         v = np.cumsum(vdots)    
         v[v>vmax] = vmax
         vsum = np.cumsum(v)
-        return v, vdots, vsum #, k, slew    
+        vdots = np.gradient(v)
+        return v, vdots, vsum # grads, k, slew
+
             
 def ernst(t1=0,tr=0,alpha=0,alpharad = 0):
     varA = -1
