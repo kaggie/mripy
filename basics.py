@@ -3,23 +3,30 @@
 
 import numpy as np
 
-class gradients():
-    def __init__(self):
-        def slewlimit(self,slew, slewmax=.1):
-            slewmax = .1
-            slewnew = np.array(slew)
-            slewnew[slew>slewmax] = slewmax
-            slewnew[slew<-slewmax] = -slewmax
-            return slewnew
-
-        def gradlimit(self,grad, gradmax=.1):
-            gradmax = .1
-            grad0 = np.abs(grad)<np.abs(gradmax)
-            gradnew = np.array(grad)
-            gradnew[grad>gradmax] = gradmax
-            gradnew[grad<-gradmax] = -gradmax
-            return gradnew
-            
+class gradient_class():
+    def __init__(self,k=np.array(10)):
+        self.k = k
+    def calc_gradient(self):
+        self.gradient = np.gradient(self.k)
+        self.slew = np.gradient(self.gradient)
+    def calc_k(self):
+        self.gradient = np.cumsum(self.slew)
+        self.k = np.cumsum(self.gradient)
+    def slewlimit(self, slewmax=.1):
+        slew = self.slew
+        slewnew = np.array(slew)
+        slewnew[slew>slewmax] = slewmax
+        slewnew[slew<-slewmax] = -slewmax
+        self.slew = slewnew
+        return slewnew
+    def gradlimit(self, gradmax=.1):
+        grad = self.gradient
+        grad0 = np.abs(grad)<np.abs(gradmax)
+        gradnew = np.array(grad)
+        gradnew[grad>gradmax] = gradmax
+        gradnew[grad<-gradmax] = -gradmax
+        self.gradient = gradnew
+        return gradnew
             
 def ernst(t1=0,tr=0,alpha=0,alpharad = 0):
     varA = -1
