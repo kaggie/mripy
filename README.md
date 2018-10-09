@@ -187,6 +187,8 @@ OCRA
 * https://github.com/Radiomics/pyradiomics
 * https://github.com/Radiomics/SlicerRadiomics
 * https://pypi.org/project/MedPy/
+* https://github.com/QTIM-Lab/DeepNeuro
+
 ### Knee
 * https://bitbucket.org/marcniethammer/ksrt/wiki/Home
 
