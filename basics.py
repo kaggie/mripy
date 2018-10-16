@@ -5,6 +5,12 @@ import numpy as np
 
 
 
+def dice_coeff_jacard(im1, im2):
+    return np.sum(im1[im1=im2])*2.0 / (np.sum(im1) + np.sum(im2))
+
+
+
+
 def sitkregister(regim, otherim,register_type = 'affine',parent=None,return_param_map=False,param_map = None):
     #newimage,self.sitk_param_map = sitkregister(im1, im2,register_type = 'repeat',param_map = self.sitk_param_map, parent=self.parent,return_param_map=True)
     import SimpleITK as sitk
