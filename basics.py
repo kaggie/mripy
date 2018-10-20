@@ -5,8 +5,21 @@ import numpy as np
 
 
 
-def dice_coeff_jacard(im1, im2):
+def dice_coeff(im1, im2):
     return np.sum(im1[im1=im2])*2.0 / (np.sum(im1) + np.sum(im2))
+
+
+def read_roi_xml(filename): 
+    obj = untangle.parse(filename)
+    p0 = obj.ANNOTATION.OBJECT.GEOM.FIGURES.FIGURE.SEGMENTS.SEGMENT.POINTS.P
+    Xs = []
+    Ys = []
+    for p in p0:
+        x = float(p.X.cdata)
+        y = float(p.Y.cdata)
+        Xs.append(x)
+        Ys.append(y)
+    return Xs, Ys
 
 
 
