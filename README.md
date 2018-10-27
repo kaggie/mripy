@@ -217,6 +217,8 @@ OCRA
 * https://github.com/david-gpu/srez
 * https://github.com/mriphysics
 * https://github.com/khcs/brain-synthesis-lesion-segmentation/blob/master/utils/merge_2d_test_to_nii.py
+* https://github.com/ad12/DOSMA
+
 
 # Radiofrequency and Electromagnetism
 
