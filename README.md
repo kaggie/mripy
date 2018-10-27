@@ -204,6 +204,7 @@ OCRA
 * https://github.com/Kamnitsask/deepmedic
 * Github.com/FlorianKnoll
 * Colah.github.io/post/2015-08-Backprop
+* https://qtim-lab.github.io/research/
 
 
 ## General Machine Learning (not MRI)
