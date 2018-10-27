@@ -197,6 +197,7 @@ OCRA
 * https://github.com/WinawerLab
 * https://github.com/mwaskom/lyman
 * https://github.com/jlohmeier/atlasBREX
+* https://github.com/taigw/brats17
 
 
 ## Machine learning
