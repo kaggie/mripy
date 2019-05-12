@@ -10,7 +10,7 @@ Welcome to the mripy wiki!
 ## OpenSource MRI
 * Openmri.github.io/ocra
 * https://github.com/opencore     Opencore nmr
-* https://github.com/mtwieg/NMR/commits?author=mtwieg  Mtwieg github.com  
+* https://github.com/mtwieg/NMR/  Mtwieg github.com  
 * http://od1n.sourceforge.net/
 medusa Stanford
 * http://www.opensourceimaging.org/project/gr-mri-a-software-package-for-magnetic-resonance-imaging-using-software-defined-radios/
@@ -78,9 +78,14 @@ OCRA
 ## Image reconstruction
 * https://github.com/mrirecon/bart
 * https://github.com/gadgetron/gadgetron-python-ismrmrd-client
-* https://github.com/gadgetron/gadgetron
 * https://github.com/ismrmrd/ismrmrd-python
 * https://github.com/mikgroup/espirit-python
+
+
+# Offline / Adjacent Recon
+* https//yarra.rocks
+* https://github.com/gadgetron/gadgetron
+
 
 
 
@@ -293,4 +298,4 @@ https://github.com/khammernik
 
 ###  Tools to think about
 
-Check out Gitlab.com, Github.com, Bitbucket.com, Docker, Jupyter, Binder, BART, MIRT, PowerGrid, GPI, Yarra, Gadgetron
+Check out Gitlab.com, Github.com, Bitbucket.com, Docker, Jupyter, Binder, BART, MIRT, PowerGrid, GPI
