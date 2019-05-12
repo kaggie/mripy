@@ -82,6 +82,8 @@ OCRA
 * https://github.com/ismrmrd/ismrmrd-python
 * https://github.com/mikgroup/espirit-python
 
+
+
 ## Non-Uniform FFT
 * https://github.com/dfm/python-nufft
 * https://github.com/jakevdp/nufftpy
@@ -106,6 +108,8 @@ OCRA
 
 ## Compressed Sensing
 * https://github.com/topics/compressed-sensing
+* https://github.com/thomaskuestner/CS_MoCo_LAB
+
 
 
 ## Spin echo
@@ -286,3 +290,7 @@ http://people.eecs.berkeley.edu/~mlustig/Software.html
 https://gitlab.com/mariadeprez/irtk-public
 
 https://github.com/khammernik
+
+###  Tools to think about
+
+Check out Gitlab.com, Github.com, Bitbucket.com, Docker, Jupyter, Binder, BART, MIRT, PowerGrid, GPI, Yarra, Gadgetron
