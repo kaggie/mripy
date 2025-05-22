@@ -1,0 +1,7 @@
+PyQt5
+pyqtgraph
+pydicom
+nibabel
+SimpleITK
+scikit-image
+Pillow
