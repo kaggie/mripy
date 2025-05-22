@@ -222,11 +222,19 @@ class MainWindow(QMainWindow):
     def load_plugins(self): # New method in MainWindow
         # Example of explicit plugin loading
         from plugins.mrsi_fitting_plugin import MRSIFittingPlugin # Import here to avoid circularity if plugin imports MainWindow
+        from plugins.dmri_fitting_plugin import DMRICorePlugin # Added import for dMRI plugin
         
-        mrsi_plugin = MRSIFittingPlugin()
-        mrsi_plugin.initialize(self)
-        # Store the plugin if you need to manage it later
         if not hasattr(self, 'loaded_plugins'):
             self.loaded_plugins = []
+
+        # Load MRSI Plugin
+        mrsi_plugin = MRSIFittingPlugin()
+        mrsi_plugin.initialize(self)
         self.loaded_plugins.append(mrsi_plugin)
         print("Loaded MRSIFittingPlugin.")
+
+        # Load dMRI Plugin
+        dmri_plugin = DMRICorePlugin()
+        dmri_plugin.initialize(self)
+        self.loaded_plugins.append(dmri_plugin)
+        print("Loaded DMRICorePlugin.")
