@@ -456,7 +456,133 @@ class SingleRungBirdcageCoil(Coil):
             end_points_rotated = end_points_z
             
         start_points_final = translate_vector(start_points_rotated, self.center)
+
+
         end_points_final = translate_vector(end_points_rotated, self.center)
         
         final_segments = torch.stack((start_points_final, end_points_final), dim=1)
         return final_segments
+
+
+
+
+def main():
+    """
+    Main function to demonstrate Biot-Savart simulation for a circular loop coil.
+    """
+    print("Starting Biot-Savart simulation demonstration...")
+
+    # 1. Setup Simulation Parameters
+    print("Setting up simulation parameters...")
+    # Coil parameters
+    radius = 0.1  # meters (10 cm)
+    num_segments_coil = 100
+    current = 1.0  # Amperes
+    coil_center = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32)
+    coil_normal = torch.tensor([0.0, 0.0, 1.0], dtype=torch.float32)  # Loop in XY plane
+
+    # B-field map parameters
+    # Define ranges for a slice visualization (e.g., XY plane at Z=0)
+    # And for a line plot along Z-axis
+    map_x_range = [-0.05, 0.05]  # meters
+    map_y_range = [-0.05, 0.05]
+    map_z_value_for_xy_slice = 0.0 
+    
+    # For the 3D map to get the slice from, we need full 3D coordinates.
+    # Let's define a small 3D region for visualization if needed, or just the slice.
+    # The task asks for B_xy_magnitude in the central XY plane.
+    # We can generate a 2D map or a 3D map and take a slice.
+    # The current generate_b_field_map is 3D.
+    
+    # For plot_b_field_slice, we need 1D coordinate tensors for X, Y, Z
+    # that formed the basis of the b_field_map.
+    resolution = 31 # Odd number to ensure a point at the center for slice_index
+    
+    x_coords = torch.linspace(map_x_range[0], map_x_range[1], resolution, dtype=torch.float32)
+    y_coords = torch.linspace(map_y_range[0], map_y_range[1], resolution, dtype=torch.float32)
+    # For the XY slice at Z=0, we need a z_coords array that includes 0.
+    # Let's make a z_coords that is suitable for a small 3D volume around z=0.
+    z_coords_3d_map = torch.linspace(-0.05, 0.05, resolution, dtype=torch.float32)
+
+
+    # 2. Create Coil Object
+    print("Creating coil object...")
+    loop_coil = CircularLoopCoil(
+        radius=radius,
+        num_segments=num_segments_coil,
+        center=coil_center,
+        normal=coil_normal
+    )
+
+    # 3. Simulate B-Field Map (for Central XY Plane visualization)
+    print("Simulating B-field map for XY slice...")
+    # Generate a 3D B-field map
+    b_field_map_3d = generate_b_field_map(
+        loop_coil,
+        x_coords,
+        y_coords,
+        z_coords_3d_map, # Use the 3D z_coords here
+        current
+    )
+    
+    # Find the index for the central XY plane (z=0)
+    # We made z_coords_3d_map centered around 0 with an odd number of points.
+    z_slice_idx = resolution // 2 
+    # Verify that z_coords_3d_map[z_slice_idx] is close to 0
+    print(f"Central Z-slice for XY plane plot is at Z = {z_coords_3d_map[z_slice_idx]:.3e} m (index {z_slice_idx})")
+
+
+    # Plot B_xy_magnitude in the central XY plane (Z=0)
+    print("Plotting B_xy_magnitude in central XY plane...")
+    fig_xy_slice, ax_xy_slice = plt.subplots(figsize=(8, 7))
+    plot_b_field_slice(
+        b_field_map=b_field_map_3d,
+        x_coords=x_coords,
+        y_coords=y_coords,
+        z_coords=z_coords_3d_map, # Pass the z_coords used for the map
+        slice_axis='z',
+        slice_index=z_slice_idx,
+        component='xy_magnitude', # Magnitude of Bx and By components
+        ax=ax_xy_slice,
+        show_plot=False # Will show at the end
+    )
+    ax_xy_slice.set_title(f"$B_{{xy}}$ magnitude in XY plane (Z={z_coords_3d_map[z_slice_idx]:.2e}m)")
+
+
+    # 4. Simulate and Plot Bz along the Z-axis
+    print("Simulating and plotting Bz along the Z-axis...")
+    # Define points along the Z-axis
+    z_line_plot_range = [-0.15, 0.15] # meters
+    num_points_z_line = 100
+    z_axis_points_single_dim = torch.linspace(z_line_plot_range[0], z_line_plot_range[1], num_points_z_line, dtype=torch.float32)
+    
+    # Create 3D points for calculate_magnetic_field_at_point (X=0, Y=0)
+    z_axis_points_3d = torch.stack([
+        torch.zeros_like(z_axis_points_single_dim),
+        torch.zeros_like(z_axis_points_single_dim),
+        z_axis_points_single_dim
+    ], dim=1)
+
+    # Get coil segments (can be done once)
+    coil_segments = loop_coil.get_segments()
+
+    # Calculate Bz at each point on the Z-axis
+    bz_values_on_axis = torch.zeros(num_points_z_line, dtype=torch.float32)
+    for i, point_on_axis in enumerate(z_axis_points_3d):
+        b_field_at_point = calculate_magnetic_field_at_point(
+            segments=coil_segments,
+            point=point_on_axis,
+            current_magnitude=current
+        )
+        bz_values_on_axis[i] = b_field_at_point[2]  # Z-component of B
+
+    # Plot Bz vs Z-coordinate
+    fig_bz_line, ax_bz_line = plt.subplots(figsize=(8, 6))
+    ax_bz_line.plot(z_axis_points_single_dim.numpy(), bz_values_on_axis.numpy())
+    ax_bz_line.set_xlabel("Z-coordinate (m) along coil axis")
+    ax_bz_line.set_ylabel("$B_z$ component (Tesla)")
+    ax_bz_line.set_title("$B_z$ along the axis of a circular loop coil (R=0.1m, I=1A)")
+    ax_bz_line.grid(True)
+
+    print("Simulation and plotting complete.")
+    plt.show() # Show all plots
