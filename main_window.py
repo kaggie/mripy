@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
         view_menu.addAction(reset_layout_action)
 
         # Tools Menu
-        tools_menu = menu_bar.addMenu("&Tools")
+        self.tools_menu = menu_bar.addMenu("&Tools") # Changed to self.tools_menu
         # Populate later
 
         # Help Menu
@@ -218,3 +218,15 @@ class MainWindow(QMainWindow):
                     return
 
         super().keyPressEvent(event) # Pass on to default handler if not used
+
+    def load_plugins(self): # New method in MainWindow
+        # Example of explicit plugin loading
+        from plugins.mrsi_fitting_plugin import MRSIFittingPlugin # Import here to avoid circularity if plugin imports MainWindow
+        
+        mrsi_plugin = MRSIFittingPlugin()
+        mrsi_plugin.initialize(self)
+        # Store the plugin if you need to manage it later
+        if not hasattr(self, 'loaded_plugins'):
+            self.loaded_plugins = []
+        self.loaded_plugins.append(mrsi_plugin)
+        print("Loaded MRSIFittingPlugin.")

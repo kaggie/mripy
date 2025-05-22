@@ -5,3 +5,5 @@ nibabel
 SimpleITK
 scikit-image
 Pillow
+torch
+scipy
