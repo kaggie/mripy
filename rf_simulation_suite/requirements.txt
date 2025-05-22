@@ -1,0 +1,4 @@
+numpy
+scipy
+torch
+# pyqtgraph (assuming available from parent project or will be added if this is standalone)
