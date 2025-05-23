@@ -1,10 +1,22 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
-from scipy.integrate import cumtrapz # Added for Patlak model
+from scipy.integrate import cumtrapz, solve_ivp # Added solve_ivp
 import multiprocessing
 import os
 from functools import partial
+
+# --- Helper for 2CXM ODE System ---
+def _ode_system_2cxm(t, y, Fp, PS, vp, ve, Cp_aif_interp_func):
+    C_p_tis, C_e_tis = y 
+    Cp_aif_val = Cp_aif_interp_func(t)
+
+    vp_eff = vp if vp > 1e-6 else 1e-6
+    ve_eff = ve if ve > 1e-6 else 1e-6
+
+    dC_p_tis_dt = (Fp / vp_eff) * (Cp_aif_val - C_p_tis) - (PS / vp_eff) * (C_p_tis - C_e_tis)
+    dC_e_tis_dt = (PS / ve_eff) * (C_p_tis - C_e_tis)
+    return [dC_p_tis_dt, dC_e_tis_dt]
 
 # --- Model Definitions (Convolution-based and Patlak) ---
 def _convolve_Cp_with_exp(t: np.ndarray, Ktrans: float, ve: float, Cp_t_interp_func) -> np.ndarray:
@@ -29,94 +41,80 @@ def extended_tofts_model_conv(t: np.ndarray, Ktrans: float, ve: float, vp: float
 
 def patlak_model(t_points: np.ndarray, Ktrans: float, vp: float, 
                  Cp_t_interp_func, integral_Cp_dt_interp_func) -> np.ndarray:
-    """
-    Patlak model.
-    Ct(t) = Ktrans * integral(Cp(tau)d(tau))_0^t + vp * Cp(t)
-
-    Args:
-        t_points (np.ndarray): Array of time points.
-        Ktrans (float): Patlak Ktrans (slope).
-        vp (float): Fractional plasma volume (intercept/Cp(t) when plotting Ct(t)/Cp(t) vs integral(Cp)/Cp(t)).
-        Cp_t_interp_func: Interpolated AIF function Cp(t').
-        integral_Cp_dt_interp_func: Interpolated function for integral_0^t Cp(tau)d(tau).
-
-    Returns:
-        np.ndarray: Modeled tissue concentration curve.
-    """
-    if Ktrans < 0 or vp < 0: # Basic validation
-        return np.full_like(t_points, np.inf)
-
+    if Ktrans < 0 or vp < 0: return np.full_like(t_points, np.inf)
     Cp_values = Cp_t_interp_func(t_points)
     integral_Cp_values = integral_Cp_dt_interp_func(t_points)
-    
     return Ktrans * integral_Cp_values + vp * Cp_values
+
+def solve_2cxm_ode_model(t_eval_points: np.ndarray, Fp: float, PS: float, vp: float, ve: float, 
+                         Cp_aif_interp_func, t_span_max: float =None) -> np.ndarray:
+    if Fp < 0 or PS < 0 or vp <= 1e-7 or ve <= 1e-7: # vp, ve must be > 0
+        return np.full_like(t_eval_points, np.inf)
+
+    y0 = [0, 0] 
+    t_span_solve = [t_eval_points[0], t_eval_points[-1]]
+    if t_span_max is not None:
+         t_span_solve = [t_eval_points[0], t_span_max]
+
+    sol = solve_ivp(
+        fun=_ode_system_2cxm,
+        t_span=t_span_solve,
+        y0=y0,
+        t_eval=t_eval_points, 
+        args=(Fp, PS, vp, ve, Cp_aif_interp_func),
+        method='RK45', 
+        dense_output=False 
+    )
+
+    if sol.status != 0: 
+        return np.full_like(t_eval_points, np.inf) 
+
+    C_p_tis_solved = sol.y[0, :]
+    C_e_tis_solved = sol.y[1, :]
+    
+    Ct_model = vp * C_p_tis_solved + ve * C_e_tis_solved 
+    return Ct_model
 
 
 # --- Single-Voxel Fitting Functions ---
-def fit_standard_tofts(
-    t_tissue: np.ndarray, 
-    Ct_tissue: np.ndarray, 
-    Cp_interp_func, 
-    initial_params=(0.1, 0.2), 
-    bounds_params=([0, 0], [1.0, 1.0]) 
-) -> tuple[tuple[float, float] | None, np.ndarray | None]:
-    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return None, None
+def fit_standard_tofts(t_tissue, Ct_tissue, Cp_interp_func, initial_params=(0.1, 0.2), bounds_params=([0, 0], [1.0, 1.0])):
+    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return (np.nan,np.nan), np.full_like(t_tissue, np.nan)
     try:
         objective_func = lambda t_obj, Ktrans, ve: standard_tofts_model_conv(t_obj, Ktrans, ve, Cp_interp_func)
         popt, pcov = curve_fit(objective_func, t_tissue, Ct_tissue, p0=initial_params, bounds=bounds_params, method='trf', ftol=1e-4, xtol=1e-4, gtol=1e-4)
-        fitted_Ktrans, fitted_ve = popt
-        fitted_curve = standard_tofts_model_conv(t_tissue, fitted_Ktrans, fitted_ve, Cp_interp_func) 
-        return (fitted_Ktrans, fitted_ve), fitted_curve
-    except Exception: return None, None 
+        fitted_curve = standard_tofts_model_conv(t_tissue, popt[0], popt[1], Cp_interp_func) 
+        return tuple(popt), fitted_curve
+    except Exception: return (np.nan,np.nan), np.full_like(t_tissue, np.nan)
 
-def fit_extended_tofts(
-    t_tissue: np.ndarray, 
-    Ct_tissue: np.ndarray, 
-    Cp_interp_func, 
-    initial_params=(0.1, 0.2, 0.05), 
-    bounds_params=([0, 0, 0], [1.0, 1.0, 0.5])
-) -> tuple[tuple[float, float, float] | None, np.ndarray | None]:
-    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return None, None
+def fit_extended_tofts(t_tissue, Ct_tissue, Cp_interp_func, initial_params=(0.1, 0.2, 0.05), bounds_params=([0, 0, 0], [1.0, 1.0, 0.5])):
+    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return (np.nan,np.nan,np.nan), np.full_like(t_tissue, np.nan)
     try:
         objective_func = lambda t_obj, Ktrans, ve, vp: extended_tofts_model_conv(t_obj, Ktrans, ve, vp, Cp_interp_func)
         popt, pcov = curve_fit(objective_func, t_tissue, Ct_tissue, p0=initial_params, bounds=bounds_params, method='trf', ftol=1e-4, xtol=1e-4, gtol=1e-4)
-        fitted_Ktrans, fitted_ve, fitted_vp = popt
-        fitted_curve = extended_tofts_model_conv(t_tissue, fitted_Ktrans, fitted_ve, fitted_vp, Cp_interp_func)
-        return (fitted_Ktrans, fitted_ve, fitted_vp), fitted_curve
-    except Exception: return None, None
+        fitted_curve = extended_tofts_model_conv(t_tissue, popt[0], popt[1], popt[2], Cp_interp_func)
+        return tuple(popt), fitted_curve
+    except Exception: return (np.nan,np.nan,np.nan), np.full_like(t_tissue, np.nan)
 
-def fit_patlak_model(
-    t_tissue: np.ndarray, 
-    Ct_tissue: np.ndarray, 
-    Cp_interp_func, 
-    integral_Cp_dt_interp_func,
-    initial_params=(0.05, 0.05), 
-    bounds_params=([0, 0], [1.0, 0.5]) # Ktrans_patlak, vp_patlak
-) -> tuple[tuple[float, float] | None, np.ndarray | None]:
-    """
-    Fits the Patlak model to a single voxel's tissue concentration curve.
-    """
-    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return None, None
-    
-    # Patlak analysis is typically linear for t > t*, where t* is some time after which
-    # backflux from EES to plasma is negligible or steady state is achieved.
-    # For simplicity, we fit to all points here but this could be refined.
-    # Or, ensure the time range for fitting (t_tissue) is appropriate.
-    
-    def objective_func(t_obj, Ktrans_patlak, vp_patlak):
-        return patlak_model(t_obj, Ktrans_patlak, vp_patlak, Cp_interp_func, integral_Cp_dt_interp_func)
-
+def fit_patlak_model(t_tissue, Ct_tissue, Cp_interp_func, integral_Cp_dt_interp_func, initial_params=(0.05, 0.05), bounds_params=([0, 0], [1.0, 0.5])):
+    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return (np.nan,np.nan), np.full_like(t_tissue, np.nan)
+    def objective_func(t_obj, Ktrans_patlak, vp_patlak): return patlak_model(t_obj, Ktrans_patlak, vp_patlak, Cp_interp_func, integral_Cp_dt_interp_func)
     try:
-        popt, pcov = curve_fit(objective_func, t_tissue, Ct_tissue, 
-                               p0=initial_params, bounds=bounds_params, method='trf',
-                               xtol=1e-4, ftol=1e-4, gtol=1e-4)
-        fitted_Ktrans, fitted_vp = popt
-        fitted_curve = patlak_model(t_tissue, fitted_Ktrans, fitted_vp, 
-                                    Cp_interp_func, integral_Cp_dt_interp_func)
-        return (fitted_Ktrans, fitted_vp), fitted_curve
-    except RuntimeError: return (np.nan, np.nan), np.full_like(t_tissue, np.nan)
-    except ValueError: return (np.nan, np.nan), np.full_like(t_tissue, np.nan)
+        popt, pcov = curve_fit(objective_func, t_tissue, Ct_tissue, p0=initial_params, bounds=bounds_params, method='trf', xtol=1e-4, ftol=1e-4, gtol=1e-4)
+        fitted_curve = patlak_model(t_tissue, popt[0], popt[1], Cp_interp_func, integral_Cp_dt_interp_func)
+        return tuple(popt), fitted_curve
     except Exception: return (np.nan, np.nan), np.full_like(t_tissue, np.nan)
+
+def fit_2cxm_model(t_tissue: np.ndarray, Ct_tissue: np.ndarray, Cp_aif_interp_func, t_aif_max: float,
+                   initial_params=(0.1, 0.05, 0.05, 0.1), # Fp, PS, vp, ve
+                   bounds_params=([0, 0, 1e-3, 1e-3], [2.0, 1.0, 0.5, 0.7])):
+    if not (len(t_tissue) > 1 and len(Ct_tissue) == len(t_tissue)): return (np.nan,np.nan,np.nan,np.nan), np.full_like(t_tissue, np.nan)
+    def objective_func(t_obj, Fp, PS, vp, ve):
+        return solve_2cxm_ode_model(t_obj, Fp, PS, vp, ve, Cp_aif_interp_func, t_span_max=t_aif_max)
+    try:
+        popt, pcov = curve_fit(objective_func, t_tissue, Ct_tissue, p0=initial_params, bounds=bounds_params, method='trf', ftol=1e-3, xtol=1e-3, gtol=1e-3)
+        fitted_curve = solve_2cxm_ode_model(t_tissue, popt[0], popt[1], popt[2], popt[3], Cp_aif_interp_func, t_span_max=t_aif_max)
+        return tuple(popt), fitted_curve
+    except Exception: return (np.nan,np.nan,np.nan,np.nan), np.full_like(t_tissue, np.nan)
 
 
 # --- Multiprocessing Worker Function (Top-Level) ---
@@ -143,11 +141,14 @@ def _fit_voxel_worker(args_tuple):
             params_tuple, _ = fit_extended_tofts(t_tissue_clean, Ct_voxel_clean, Cp_interp_func, initial_params_for_model, bounds_params_for_model)
             param_names = ["Ktrans", "ve", "vp"]
         elif model_name == "Patlak":
-            # Create integral interpolator for Patlak inside worker
             integral_Cp_dt_aif = cumtrapz(Cp_aif, t_aif, initial=0)
             integral_Cp_dt_interp_func = interp1d(t_aif, integral_Cp_dt_aif, kind='linear', bounds_error=False, fill_value=0.0)
             params_tuple, _ = fit_patlak_model(t_tissue_clean, Ct_voxel_clean, Cp_interp_func, integral_Cp_dt_interp_func, initial_params_for_model, bounds_params_for_model)
             param_names = ["Ktrans_patlak", "vp_patlak"]
+        elif model_name == "2CXM": # New
+            t_aif_max = t_aif[-1] if len(t_aif) > 0 else t_tissue_clean[-1] # Ensure t_aif_max is valid
+            params_tuple, _ = fit_2cxm_model(t_tissue_clean, Ct_voxel_clean, Cp_interp_func, t_aif_max, initial_params_for_model, bounds_params_for_model)
+            param_names = ["Fp_2cxm", "PS_2cxm", "vp_2cxm", "ve_2cxm"]
         else:
             return voxel_idx_xyz, model_name, {"error": f"Unknown model: {model_name}"}
         
@@ -160,7 +161,7 @@ def _fit_voxel_worker(args_tuple):
 # --- Voxel-wise Fitting Functions (Parallelized) ---
 def _base_fit_voxelwise(
     Ct_data: np.ndarray, t_tissue: np.ndarray, t_aif: np.ndarray, Cp_aif: np.ndarray,
-    model_name: str, param_names_map: dict, # e.g. {"Ktrans":"Ktrans_patlak", "vp":"vp_patlak"}
+    model_name: str, param_names_map: dict, 
     initial_params: tuple, bounds_params: tuple,
     mask: np.ndarray = None, num_processes: int = None
 ):
@@ -172,9 +173,7 @@ def _base_fit_voxelwise(
     if num_proc_to_use is None: num_proc_to_use = 1
 
     spatial_dims = Ct_data.shape[:3]
-    # Initialize parameter maps based on param_names_map keys
     result_maps = {map_key: np.full(spatial_dims, np.nan, dtype=np.float32) for map_key in param_names_map.values()}
-    
     tasks_args_list = []
     for x in range(spatial_dims[0]):
         for y in range(spatial_dims[1]):
@@ -184,15 +183,12 @@ def _base_fit_voxelwise(
                 tasks_args_list.append(((x,y,z), Ct_voxel, t_tissue, t_aif, Cp_aif, model_name, initial_params, bounds_params))
 
     if not tasks_args_list: print(f"No voxels to process for {model_name} fitting."); return result_maps
-
     print(f"Starting {model_name} fitting for {len(tasks_args_list)} voxels using up to {num_proc_to_use} processes...")
-    
     results_list = []
     if num_proc_to_use > 1 and len(tasks_args_list) > 1:
         try:
             with multiprocessing.Pool(processes=num_proc_to_use) as pool: results_list = pool.map(_fit_voxel_worker, tasks_args_list)
         except Exception as e: print(f"Error during multiprocessing pool for {model_name}: {e}. Falling back to serial."); num_proc_to_use = 1
-            
     if not results_list or num_proc_to_use == 1:
         print(f"Processing {model_name} serially..."); results_list = [_fit_voxel_worker(args) for args in tasks_args_list]
 
@@ -202,11 +198,8 @@ def _base_fit_voxelwise(
         if model_name_out == model_name and "error" not in result_dict:
             for p_name_orig, p_name_map in param_names_map.items():
                 result_maps[p_name_map][voxel_idx_xyz] = result_dict.get(p_name_orig, np.nan)
-        # Optional: Log errors here if needed
-            
     print(f"{model_name} voxel-wise fitting completed.")
     return result_maps
-
 
 def fit_standard_tofts_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, mask=None, initial_params=(0.1, 0.2), bounds_params=([0.001, 0.001], [1.0, 1.0]), num_processes=None):
     param_names_map = {"Ktrans": "Ktrans", "ve": "ve"}
@@ -217,12 +210,12 @@ def fit_extended_tofts_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, mask=None, in
     return _base_fit_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, "Extended Tofts", param_names_map, initial_params, bounds_params, mask, num_processes)
 
 def fit_patlak_model_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, mask=None, initial_params=(0.05, 0.05), bounds_params=([0, 0], [1.0, 0.5]), num_processes=None):
-    # Use distinct names for Patlak parameters to avoid key collisions if used together
     param_names_map = {"Ktrans_patlak": "Ktrans_patlak", "vp_patlak": "vp_patlak"}
-    # The worker maps its internal "Ktrans_patlak", "vp_patlak" to these keys in the result_dict
-    # So, _base_fit_voxelwise needs to look for these in result_dict
-    # This means the param_names_map should be {"Ktrans_patlak":"Ktrans_patlak", "vp_patlak":"vp_patlak"}
-    # if the worker returns "Ktrans_patlak" and "vp_patlak".
-    # Or, the worker returns generic "Ktrans", "vp" and the mapping happens here.
-    # The current _fit_voxel_worker uses "Ktrans_patlak", "vp_patlak" as keys in its returned dict.
     return _base_fit_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, "Patlak", param_names_map, initial_params, bounds_params, mask, num_processes)
+
+def fit_2cxm_model_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, mask=None, 
+                             initial_params=(0.1, 0.05, 0.05, 0.1), # Fp, PS, vp, ve
+                             bounds_params=([0, 0, 1e-3, 1e-3], [2.0, 1.0, 0.5, 0.7]), 
+                             num_processes=None):
+    param_names_map = {"Fp_2cxm": "Fp_2cxm", "PS_2cxm": "PS_2cxm", "vp_2cxm": "vp_2cxm", "ve_2cxm": "ve_2cxm"}
+    return _base_fit_voxelwise(Ct_data, t_tissue, t_aif, Cp_aif, "2CXM", param_names_map, initial_params, bounds_params, mask, num_processes)

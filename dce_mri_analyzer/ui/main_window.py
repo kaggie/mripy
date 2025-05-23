@@ -32,14 +32,14 @@ from ..core import io
 from ..core import conversion
 from ..core import aif
 from ..core import modeling 
-from ..core import reporting # Added
+from ..core import reporting 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("DCE-MRI Analysis Tool")
-        self.setGeometry(100, 100, 1200, 850) # Increased height slightly for stats display
+        self.setGeometry(100, 100, 1250, 900) # Increased height for overlay controls
 
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
@@ -65,6 +65,11 @@ class MainWindow(QMainWindow):
         # Stats ROI attributes
         self.stats_roi_object = None
         self.current_roi_stats = None
+        # Overlay attributes
+        self.overlay_image_item = pg.ImageItem()
+        self.current_overlay_map_key = "None"
+        self.overlay_alpha = 0.5
+        self.overlay_cmap_name = 'viridis'
 
 
         self.central_widget = QWidget()
@@ -77,14 +82,14 @@ class MainWindow(QMainWindow):
         self._create_aif_section() 
         self._create_model_fitting_section() 
         self._create_processing_section() 
-        self._create_roi_stats_section() # New section for stats ROI
+        self._create_roi_stats_section() 
 
         self.left_panel_layout.addWidget(self.file_io_group)
         self.left_panel_layout.addWidget(self.conversion_settings_group)
         self.left_panel_layout.addWidget(self.aif_group)
         self.left_panel_layout.addWidget(self.model_fitting_group)
         self.left_panel_layout.addWidget(self.processing_section) 
-        self.left_panel_layout.addWidget(self.roi_stats_group) # Add new group
+        self.left_panel_layout.addWidget(self.roi_stats_group) 
         self.left_panel_layout.addStretch(1)
 
         self.right_panel_layout = QHBoxLayout() 
@@ -118,6 +123,7 @@ class MainWindow(QMainWindow):
         self.model_standard_tofts_radio.toggled.connect(self.handle_model_selection)
         self.model_extended_tofts_radio.toggled.connect(self.handle_model_selection)
         self.model_patlak_radio.toggled.connect(self.handle_model_selection) 
+        self.model_2cxm_radio.toggled.connect(self.handle_model_selection) 
         self.model_none_radio.toggled.connect(self.handle_model_selection)
         
         self.export_ktrans_button.clicked.connect(lambda: self.export_map("Ktrans"))
@@ -125,14 +131,22 @@ class MainWindow(QMainWindow):
         self.export_vp_button.clicked.connect(lambda: self.export_map("vp"))
         self.export_ktrans_patlak_button.clicked.connect(lambda: self.export_map("Ktrans_patlak")) 
         self.export_vp_patlak_button.clicked.connect(lambda: self.export_map("vp_patlak"))       
+        self.export_fp_2cxm_button.clicked.connect(lambda: self.export_map("Fp_2cxm")) 
+        self.export_ps_2cxm_button.clicked.connect(lambda: self.export_map("PS_2cxm")) 
+        self.export_vp_2cxm_button.clicked.connect(lambda: self.export_map("vp_2cxm")) 
+        self.export_ve_2cxm_button.clicked.connect(lambda: self.export_map("ve_2cxm")) 
 
         self.map_selector_combo.currentIndexChanged.connect(self.handle_map_selection_changed)
         self.slice_slider.valueChanged.connect(self.handle_slice_changed)
         self.image_view.getView().scene().sigMouseClicked.connect(self.handle_voxel_clicked)
 
-        # Stats ROI signals
         self.draw_stats_roi_button.clicked.connect(self.handle_draw_stats_roi)
         self.save_stats_button.clicked.connect(self.handle_save_roi_stats)
+
+        # Overlay control signals
+        self.overlay_map_selector_combo.currentIndexChanged.connect(self.handle_overlay_controls_changed)
+        self.overlay_alpha_slider.valueChanged.connect(self.handle_overlay_controls_changed)
+        self.overlay_cmap_combo.currentIndexChanged.connect(self.handle_overlay_controls_changed)
 
 
     def _create_file_io_section(self): # Unchanged
@@ -194,46 +208,43 @@ class MainWindow(QMainWindow):
         self.model_standard_tofts_radio = QRadioButton("Standard Tofts")
         self.model_extended_tofts_radio = QRadioButton("Extended Tofts")
         self.model_patlak_radio = QRadioButton("Patlak Model") 
+        self.model_2cxm_radio = QRadioButton("2CXM (Fp,PS,vp,ve)") 
         self.model_none_radio = QRadioButton("No Model Fitting"); self.model_none_radio.setChecked(True)
-        layout.addWidget(self.model_standard_tofts_radio); layout.addWidget(self.model_extended_tofts_radio); layout.addWidget(self.model_patlak_radio); layout.addWidget(self.model_none_radio)
-        export_layout = QHBoxLayout()
-        self.export_ktrans_button = QPushButton("Export Ktrans"); self.export_ktrans_button.setEnabled(False)
-        self.export_ve_button = QPushButton("Export ve"); self.export_ve_button.setEnabled(False)
-        self.export_vp_button = QPushButton("Export vp"); self.export_vp_button.setEnabled(False)
-        export_layout.addWidget(self.export_ktrans_button); export_layout.addWidget(self.export_ve_button); export_layout.addWidget(self.export_vp_button)
-        self.export_ktrans_patlak_button = QPushButton("Export Ktrans (Patlak)"); self.export_ktrans_patlak_button.setEnabled(False) 
-        self.export_vp_patlak_button = QPushButton("Export vp (Patlak)"); self.export_vp_patlak_button.setEnabled(False)       
-        export_layout.addWidget(self.export_ktrans_patlak_button); export_layout.addWidget(self.export_vp_patlak_button)
-        layout.addLayout(export_layout)
+        layout.addWidget(self.model_standard_tofts_radio); layout.addWidget(self.model_extended_tofts_radio); layout.addWidget(self.model_patlak_radio); layout.addWidget(self.model_2cxm_radio); layout.addWidget(self.model_none_radio)
+        export_layout_tofts = QHBoxLayout()
+        self.export_ktrans_button = QPushButton("Ktrans (Tofts)"); self.export_ktrans_button.setEnabled(False)
+        self.export_ve_button = QPushButton("ve (Tofts)"); self.export_ve_button.setEnabled(False)
+        self.export_vp_button = QPushButton("vp (Ext.Tofts)"); self.export_vp_button.setEnabled(False)
+        export_layout_tofts.addWidget(self.export_ktrans_button); export_layout_tofts.addWidget(self.export_ve_button); export_layout_tofts.addWidget(self.export_vp_button)
+        layout.addLayout(export_layout_tofts)
+        export_layout_patlak = QHBoxLayout()
+        self.export_ktrans_patlak_button = QPushButton("Ktrans (Patlak)"); self.export_ktrans_patlak_button.setEnabled(False) 
+        self.export_vp_patlak_button = QPushButton("vp (Patlak)"); self.export_vp_patlak_button.setEnabled(False)       
+        export_layout_patlak.addWidget(self.export_ktrans_patlak_button); export_layout_patlak.addWidget(self.export_vp_patlak_button)
+        layout.addLayout(export_layout_patlak)
+        export_layout_2cxm = QHBoxLayout() 
+        self.export_fp_2cxm_button = QPushButton("Fp (2CXM)"); self.export_fp_2cxm_button.setEnabled(False)
+        self.export_ps_2cxm_button = QPushButton("PS (2CXM)"); self.export_ps_2cxm_button.setEnabled(False)
+        self.export_vp_2cxm_button = QPushButton("vp (2CXM)"); self.export_vp_2cxm_button.setEnabled(False)
+        self.export_ve_2cxm_button = QPushButton("ve (2CXM)"); self.export_ve_2cxm_button.setEnabled(False)
+        export_layout_2cxm.addWidget(self.export_fp_2cxm_button); export_layout_2cxm.addWidget(self.export_ps_2cxm_button); export_layout_2cxm.addWidget(self.export_vp_2cxm_button); export_layout_2cxm.addWidget(self.export_ve_2cxm_button)
+        layout.addLayout(export_layout_2cxm)
         self.model_fitting_group.setLayout(layout)
 
-    def _create_roi_stats_section(self): # New
+    def _create_roi_stats_section(self): # Unchanged
         self.roi_stats_group = QGroupBox("ROI Statistics")
         layout = QVBoxLayout()
-        
-        self.draw_stats_roi_button = QPushButton("Draw/Reset Stats ROI")
-        layout.addWidget(self.draw_stats_roi_button)
-        
-        self.stats_results_display = QTextEdit()
-        self.stats_results_display.setReadOnly(True)
-        self.stats_results_display.setPlaceholderText("ROI statistics will appear here.")
-        self.stats_results_display.setFixedHeight(150) # Set a fixed height
-        layout.addWidget(self.stats_results_display)
-        
-        self.save_stats_button = QPushButton("Save ROI Stats")
-        self.save_stats_button.setEnabled(False)
-        layout.addWidget(self.save_stats_button)
-        
+        self.draw_stats_roi_button = QPushButton("Draw/Reset Stats ROI"); layout.addWidget(self.draw_stats_roi_button)
+        self.stats_results_display = QTextEdit(); self.stats_results_display.setReadOnly(True); self.stats_results_display.setPlaceholderText("ROI statistics will appear here."); self.stats_results_display.setFixedHeight(150); layout.addWidget(self.stats_results_display)
+        self.save_stats_button = QPushButton("Save ROI Stats"); self.save_stats_button.setEnabled(False); layout.addWidget(self.save_stats_button)
         self.roi_stats_group.setLayout(layout)
 
-
     def handle_model_selection(self): # Unchanged
-        self.export_ktrans_button.setEnabled(False); self.export_ve_button.setEnabled(False); self.export_vp_button.setEnabled(False)
-        self.export_ktrans_patlak_button.setEnabled(False); self.export_vp_patlak_button.setEnabled(False)
+        self.selected_model_name = None
         if self.model_standard_tofts_radio.isChecked(): self.selected_model_name = "Standard Tofts"
         elif self.model_extended_tofts_radio.isChecked(): self.selected_model_name = "Extended Tofts"
         elif self.model_patlak_radio.isChecked(): self.selected_model_name = "Patlak" 
-        else: self.selected_model_name = None
+        elif self.model_2cxm_radio.isChecked(): self.selected_model_name = "2CXM" 
         self.log_console.append(f"Model selected: {self.selected_model_name}")
         self.update_export_buttons_state() 
 
@@ -246,16 +257,50 @@ class MainWindow(QMainWindow):
         self.run_button = QPushButton("Run Full Analysis (S->C & Voxel-wise Fitting)"); layout.addRow(self.run_button)
         self.processing_section.setLayout(layout)
 
-    def _create_display_area(self): # Unchanged
+    def _create_display_area(self): # Modified
         self.display_area_group = QGroupBox("Image Display") 
         display_layout = QVBoxLayout(self.display_area_group)
+
+        # Base Map Selector
         self.map_selector_combo = QComboBox(); display_layout.addWidget(self.map_selector_combo)
+        
+        # Slice Slider for Base Map
         slider_layout = QHBoxLayout()
         self.slice_slider_label = QLabel("Slice: 0/0")
         self.slice_slider = QSlider(Qt.Horizontal); self.slice_slider.setEnabled(False) 
         slider_layout.addWidget(QLabel("Slice:")); slider_layout.addWidget(self.slice_slider, 1); slider_layout.addWidget(self.slice_slider_label)
         display_layout.addLayout(slider_layout)
-        self.image_view = pg.ImageView(); display_layout.addWidget(self.image_view)
+
+        # PyQtGraph ImageView and Overlay Item
+        self.image_view = pg.ImageView()
+        # self.overlay_image_item is already created in __init__
+        self.image_view.getView().addItem(self.overlay_image_item)
+        self.overlay_image_item.setZValue(10) # Render on top
+        self.overlay_image_item.setVisible(False) # Initially hidden
+        display_layout.addWidget(self.image_view)
+        
+        # Overlay Controls
+        overlay_controls_layout = QHBoxLayout()
+        overlay_controls_layout.addWidget(QLabel("Overlay:"))
+        self.overlay_map_selector_combo = QComboBox()
+        self.overlay_map_selector_combo.addItem("None") # Default "None" option
+        overlay_controls_layout.addWidget(self.overlay_map_selector_combo)
+        
+        self.overlay_alpha_slider = QSlider(Qt.Horizontal)
+        self.overlay_alpha_slider.setRange(0, 100)
+        self.overlay_alpha_slider.setValue(int(self.overlay_alpha * 100))
+        overlay_controls_layout.addWidget(self.overlay_alpha_slider)
+        
+        self.overlay_alpha_label = QLabel(f"{self.overlay_alpha*100:.0f}%")
+        overlay_controls_layout.addWidget(self.overlay_alpha_label)
+        
+        overlay_controls_layout.addWidget(QLabel("Cmap:"))
+        self.overlay_cmap_combo = QComboBox()
+        self.overlay_cmap_combo.addItems(['viridis', 'jet', 'hot', 'coolwarm', 'magma', 'plasma', 'inferno', 'cividis'])
+        self.overlay_cmap_combo.setCurrentText(self.overlay_cmap_name)
+        overlay_controls_layout.addWidget(self.overlay_cmap_combo)
+        display_layout.addLayout(overlay_controls_layout) # Add overlay controls to display area
+
         self.right_panel_layout.addWidget(self.display_area_group, stretch=2)
 
     def _create_log_console_and_plot_area(self): # Unchanged
@@ -266,33 +311,103 @@ class MainWindow(QMainWindow):
         self.log_console = QTextEdit(); self.log_console.setReadOnly(True); plot_log_layout.addWidget(self.log_console, stretch=1)
         self.right_panel_layout.addWidget(plot_log_group, stretch=1)
 
-    def update_displayable_volume(self, name: str, data: np.ndarray): # Unchanged
+    def update_displayable_volume(self, name: str, data: np.ndarray): # Modified
         if data is None: return
-        self.displayable_volumes[name] = data; current_selection_text = self.map_selector_combo.currentText()
-        self.map_selector_combo.blockSignals(True); self.map_selector_combo.clear(); self.map_selector_combo.addItems(self.displayable_volumes.keys())
-        idx = self.map_selector_combo.findText(name) 
-        if idx != -1: self.map_selector_combo.setCurrentIndex(idx)
-        elif current_selection_text and self.map_selector_combo.findText(current_selection_text) != -1: self.map_selector_combo.setCurrentText(current_selection_text)
+        self.displayable_volumes[name] = data
+        
+        # Update base map selector
+        current_base_selection = self.map_selector_combo.currentText()
+        self.map_selector_combo.blockSignals(True)
+        self.map_selector_combo.clear()
+        self.map_selector_combo.addItems(self.displayable_volumes.keys())
+        idx_base = self.map_selector_combo.findText(name) # Try to select new/updated map
+        if idx_base != -1: self.map_selector_combo.setCurrentIndex(idx_base)
+        elif current_base_selection and self.map_selector_combo.findText(current_base_selection) != -1:
+            self.map_selector_combo.setCurrentText(current_base_selection)
         self.map_selector_combo.blockSignals(False)
-        if self.map_selector_combo.currentText() == name: self.handle_map_selection_changed()
+        
+        # Update overlay map selector
+        current_overlay_selection = self.overlay_map_selector_combo.currentText()
+        self.overlay_map_selector_combo.blockSignals(True)
+        self.overlay_map_selector_combo.clear()
+        self.overlay_map_selector_combo.addItem("None")
+        for vol_name, vol_data in self.displayable_volumes.items():
+            if vol_data.ndim == 3: # Only 3D maps for overlay
+                self.overlay_map_selector_combo.addItem(vol_name)
+        idx_overlay = self.overlay_map_selector_combo.findText(current_overlay_selection)
+        if idx_overlay != -1: self.overlay_map_selector_combo.setCurrentIndex(idx_overlay)
+        else: self.overlay_map_selector_combo.setCurrentIndex(0) # Default to "None"
+        self.overlay_map_selector_combo.blockSignals(False)
 
-    def handle_map_selection_changed(self): # Modified to clear stats ROI if map changes
-        if self.stats_roi_object: # Remove stats ROI if map changes
-            self.image_view.removeItem(self.stats_roi_object)
-            self.stats_roi_object = None
-            self.stats_results_display.clear()
-            self.save_stats_button.setEnabled(False)
-            self.current_roi_stats = None
-            self.log_console.append("Stats ROI cleared due to map change.")
+        # Trigger display update if the newly added map is now the current base map
+        if self.map_selector_combo.currentText() == name: 
+            self.handle_map_selection_changed() 
+        # No automatic update of overlay here, user action via handle_overlay_controls_changed
 
+    def handle_overlay_controls_changed(self): # New
+        self.current_overlay_map_key = self.overlay_map_selector_combo.currentText()
+        self.overlay_alpha = self.overlay_alpha_slider.value() / 100.0
+        self.overlay_alpha_label.setText(f"{self.overlay_alpha*100:.0f}%")
+        self.overlay_cmap_name = self.overlay_cmap_combo.currentText()
+        self.update_overlay_image_display()
+
+    def update_overlay_image_display(self): # New
+        if self.current_overlay_map_key is None or self.current_overlay_map_key == "None":
+            self.overlay_image_item.clear()
+            self.overlay_image_item.setVisible(False)
+            return
+
+        overlay_volume_data = self.displayable_volumes.get(self.current_overlay_map_key)
+        base_image_item = self.image_view.getImageItem() # Main image item in ImageView
+
+        if overlay_volume_data is None or base_image_item is None or base_image_item.image is None:
+            self.overlay_image_item.clear()
+            self.overlay_image_item.setVisible(False)
+            return
+
+        current_slice_idx = self.image_view.currentIndex # Slice from base image view
+
+        if overlay_volume_data.ndim == 3:
+            overlay_data_permuted = overlay_volume_data.transpose(2,1,0) # Z,Y,X
+        else: # Only allow 3D maps for overlay
+            self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+            
+        if not (0 <= current_slice_idx < overlay_data_permuted.shape[0]):
+            self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return 
+
+        overlay_slice_to_display = overlay_data_permuted[current_slice_idx]
+        
+        self.overlay_image_item.setImage(overlay_slice_to_display, autoLevels=False) 
+        cmap = pg.colormap.get(self.overlay_cmap_name)
+        lut = cmap.getLookupTable(alpha=True) # Use alpha from LUT if cmap supports it
+            
+        min_val = np.nanmin(overlay_slice_to_display) 
+        max_val = np.nanmax(overlay_slice_to_display)
+        if np.isnan(min_val) or np.isnan(max_val) or min_val == max_val: 
+            # Use full volume stats for levels if slice is flat/NaN, for consistency
+            min_val_vol = np.nanmin(overlay_volume_data)
+            max_val_vol = np.nanmax(overlay_volume_data)
+            if np.isnan(min_val_vol) or np.isnan(max_val_vol) or min_val_vol == max_val_vol:
+                self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+            min_val, max_val = min_val_vol, max_val_vol
+
+        self.overlay_image_item.setLookupTable(lut)
+        self.overlay_image_item.setLevels([min_val, max_val])
+        self.overlay_image_item.setOpacity(self.overlay_alpha)
+        self.overlay_image_item.setVisible(True)
+
+
+    def handle_map_selection_changed(self): # Modified
+        if self.stats_roi_object: self.image_view.removeItem(self.stats_roi_object); self.stats_roi_object = None; self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; self.log_console.append("Stats ROI cleared due to map change.")
         selected_key = self.map_selector_combo.currentText()
-        if not selected_key: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); return
+        if not selected_key: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
         self.current_display_key = selected_key; volume_data = self.displayable_volumes.get(self.current_display_key)
-        if volume_data is None: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); return
+        if volume_data is None: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
         display_data = None
         if volume_data.ndim == 3: display_data = volume_data.transpose(2, 1, 0)
         elif volume_data.ndim == 4: mean_over_time = np.mean(volume_data, axis=3); display_data = mean_over_time.transpose(2, 1, 0)
-        else: self.log_console.append(f"Volume '{selected_key}' unsupported dim: {volume_data.ndim}."); self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); return
+        else: self.log_console.append(f"Volume '{selected_key}' unsupported dim: {volume_data.ndim}."); self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        
         self.image_view.setImage(display_data, autoRange=True, autoLevels=True, autoHistogramRange=True)
         num_slices = display_data.shape[0]
         self.slice_slider.setEnabled(True); self.slice_slider.setMinimum(0); self.slice_slider.setMaximum(num_slices - 1)
@@ -300,20 +415,22 @@ class MainWindow(QMainWindow):
         if current_idx < 0: current_idx = 0
         self.image_view.setCurrentIndex(current_idx); self.slice_slider.setValue(current_idx)
         self.slice_slider_label.setText(f"Slice: {current_idx + 1}/{num_slices}")
+        
+        self.update_overlay_image_display() # Update overlay when base map changes
 
-    def handle_slice_changed(self, value): # Modified to update stats ROI if it exists
+    def handle_slice_changed(self, value): # Modified
         self.current_slice_index = value
         if self.image_view.image is not None:
             num_slices = self.image_view.image.shape[0]; safe_value = np.clip(value, 0, num_slices - 1)
             self.image_view.setCurrentIndex(safe_value); self.slice_slider_label.setText(f"Slice: {safe_value + 1}/{num_slices}")
             if value != safe_value and self.slice_slider.value() != safe_value : self.slice_slider.setValue(safe_value)
-            if self.stats_roi_object: # If stats ROI exists, re-calculate stats for the new slice
-                self.handle_stats_roi_updated()
+            if self.stats_roi_object: self.handle_stats_roi_updated()
+            self.update_overlay_image_display() # Update overlay when slice changes
 
 
     def handle_voxel_clicked(self, mouse_click_event): # Unchanged
         if not mouse_click_event.double(): return 
-        image_item = self.image_view.getImageItem()
+        image_item = self.image_view.getImageItem(); 
         if image_item is None or image_item.image is None: return
         scene_pos = mouse_click_event.scenePos(); img_coords_float = image_item.mapFromScene(scene_pos)
         y_in_slice = int(round(img_coords_float.y())); x_in_slice = int(round(img_coords_float.x())); current_z_index_in_display = self.image_view.currentIndex 
@@ -334,7 +451,7 @@ class MainWindow(QMainWindow):
         self.plot_widget.plot(t_values, Ct_voxel, pen=pg.mkPen('b', width=2), name='Tissue Conc.')
         if self.aif_time is not None and self.aif_concentration is not None: self.plot_widget.plot(self.aif_time, self.aif_concentration, pen='r', name='AIF')
         if self.selected_model_name and self.parameter_maps and self.Cp_interp_func: 
-            model_params = {}; valid_params = True; fitted_curve = None
+            model_params = {}; valid_params = True; fitted_curve = None; param_str = "N/A"
             if self.selected_model_name == "Standard Tofts":
                 if "Ktrans" in self.parameter_maps and "ve" in self.parameter_maps: Ktrans_val = self.parameter_maps["Ktrans"][x_idx, y_idx, z_idx]; ve_val = self.parameter_maps["ve"][x_idx, y_idx, z_idx]; 
                 if np.isnan(Ktrans_val) or np.isnan(ve_val): valid_params = False; else: model_params['Ktrans'] = Ktrans_val; model_params['ve'] = ve_val
@@ -350,7 +467,13 @@ class MainWindow(QMainWindow):
                 if np.isnan(Ktrans_val) or np.isnan(vp_val): valid_params = False; else: model_params['Ktrans_patlak'] = Ktrans_val; model_params['vp_patlak'] = vp_val
                 else: valid_params = False
                 if valid_params: fitted_curve = modeling.patlak_model(t_values, model_params['Ktrans_patlak'], model_params['vp_patlak'], self.Cp_interp_func, self.integral_Cp_dt_interp_func)
-            if valid_params and fitted_curve is not None: self.plot_widget.plot(t_values, fitted_curve, pen='g', name=f'{self.selected_model_name} Fit'); param_str = ", ".join([f"{k}={v:.3f}" for k,v in model_params.items()]); self.log_console.append(f"Plotted fit for ({x_idx},{y_idx},{z_idx}). Params: {param_str}")
+            elif self.selected_model_name == "2CXM": 
+                map_keys = ["Fp_2cxm", "PS_2cxm", "vp_2cxm", "ve_2cxm"]
+                if all(key in self.parameter_maps for key in map_keys): params = [self.parameter_maps[key][x_idx, y_idx, z_idx] for key in map_keys];
+                if any(np.isnan(p) for p in params): valid_params = False; else: model_params = dict(zip(map_keys, params)); Fp_val, PS_val, vp_val, ve_val = params[0], params[1], params[2], params[3]
+                else: valid_params = False
+                if valid_params: t_aif_max_for_plot = self.aif_time[-1] if self.aif_time is not None and len(self.aif_time) > 0 else t_values[-1]; fitted_curve = modeling.solve_2cxm_ode_model(t_values, Fp_val, PS_val, vp_val, ve_val, self.Cp_interp_func, t_span_max=t_aif_max_for_plot)
+            if valid_params and fitted_curve is not None: self.plot_widget.plot(t_values, fitted_curve, pen='g', name=f'{self.selected_model_name} Fit'); param_str = ", ".join([f"{k}={v:.4f}" for k,v in model_params.items()]); self.log_console.append(f"Plotted fit for ({x_idx},{y_idx},{z_idx}). Params: {param_str}")
             elif valid_params and fitted_curve is None: self.log_console.append(f"Fit parameters valid but curve generation failed for {self.selected_model_name} at ({x_idx},{y_idx},{z_idx}).")
             else: self.log_console.append(f"No valid pre-fitted parameters for voxel ({x_idx},{y_idx},{z_idx}) for {self.selected_model_name}.")
         self.plot_widget.autoRange()
@@ -529,6 +652,7 @@ class MainWindow(QMainWindow):
             if self.selected_model_name == "Standard Tofts": self.parameter_maps = modeling.fit_standard_tofts_voxelwise(self.Ct_data, t_tissue, self.aif_time, self.aif_concentration, mask=mask_to_use, num_processes=num_cores_to_use)
             elif self.selected_model_name == "Extended Tofts": self.parameter_maps = modeling.fit_extended_tofts_voxelwise(self.Ct_data, t_tissue, self.aif_time, self.aif_concentration, mask=mask_to_use, num_processes=num_cores_to_use)
             elif self.selected_model_name == "Patlak": self.parameter_maps = modeling.fit_patlak_model_voxelwise(self.Ct_data, t_tissue, self.aif_time, self.aif_concentration, mask=mask_to_use, num_processes=num_cores_to_use)
+            elif self.selected_model_name == "2CXM": self.parameter_maps = modeling.fit_2cxm_model_voxelwise(self.Ct_data, t_tissue, self.aif_time, self.aif_concentration, mask=mask_to_use, num_processes=num_cores_to_use)
             self.log_console.append(f"Parallel voxel-wise {self.selected_model_name} fitting completed."); self.display_label.setText(f"{self.selected_model_name} fitting done. Maps generated: {', '.join(self.parameter_maps.keys())}")
             for map_name, map_data in self.parameter_maps.items(): self.update_displayable_volume(map_name, map_data)
             self.update_export_buttons_state() 
@@ -536,11 +660,16 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
     def update_export_buttons_state(self): # Unchanged
-        self.export_ktrans_button.setEnabled("Ktrans" in self.parameter_maps and self.selected_model_name in ["Standard Tofts", "Extended Tofts"])
-        self.export_ve_button.setEnabled("ve" in self.parameter_maps and self.selected_model_name in ["Standard Tofts", "Extended Tofts"])
-        self.export_vp_button.setEnabled("vp" in self.parameter_maps and self.selected_model_name == "Extended Tofts")
-        self.export_ktrans_patlak_button.setEnabled("Ktrans_patlak" in self.parameter_maps and self.selected_model_name == "Patlak")
-        self.export_vp_patlak_button.setEnabled("vp_patlak" in self.parameter_maps and self.selected_model_name == "Patlak")
+        is_std_tofts = self.selected_model_name == "Standard Tofts"; is_ext_tofts = self.selected_model_name == "Extended Tofts"; is_patlak = self.selected_model_name == "Patlak"; is_2cxm = self.selected_model_name == "2CXM"
+        self.export_ktrans_button.setEnabled("Ktrans" in self.parameter_maps and (is_std_tofts or is_ext_tofts))
+        self.export_ve_button.setEnabled("ve" in self.parameter_maps and (is_std_tofts or is_ext_tofts))
+        self.export_vp_button.setEnabled("vp" in self.parameter_maps and is_ext_tofts)
+        self.export_ktrans_patlak_button.setEnabled("Ktrans_patlak" in self.parameter_maps and is_patlak)
+        self.export_vp_patlak_button.setEnabled("vp_patlak" in self.parameter_maps and is_patlak)
+        self.export_fp_2cxm_button.setEnabled("Fp_2cxm" in self.parameter_maps and is_2cxm)
+        self.export_ps_2cxm_button.setEnabled("PS_2cxm" in self.parameter_maps and is_2cxm)
+        self.export_vp_2cxm_button.setEnabled("vp_2cxm" in self.parameter_maps and is_2cxm)
+        self.export_ve_2cxm_button.setEnabled("ve_2cxm" in self.parameter_maps and is_2cxm)
 
     def export_map(self, map_name: str): # Unchanged
         self.log_console.append(f"Export map button clicked for: {map_name}"); param_map_data = self.parameter_maps.get(map_name)
@@ -555,117 +684,43 @@ class MainWindow(QMainWindow):
                 self.log_console.append(f"{map_name} map saved successfully."); self.display_label.setText(f"{map_name} map saved to {os.path.basename(output_filepath)}")
             except Exception as e: self.log_console.append(f"Error saving {map_name} map: {e}\n{traceback.format_exc()}"); self.display_label.setText(f"Error saving {map_name} map. See log.")
 
-    # --- New Stats ROI Methods ---
-    def handle_draw_stats_roi(self):
-        if self.stats_roi_object: 
-            self.image_view.removeItem(self.stats_roi_object)
-            self.stats_roi_object = None
-        
+    def handle_draw_stats_roi(self): # Unchanged
+        if self.stats_roi_object: self.image_view.removeItem(self.stats_roi_object); self.stats_roi_object = None
         current_img_item = self.image_view.getImageItem()
-        if current_img_item is None or current_img_item.image is None: 
-            self.log_console.append("No image displayed to draw Stats ROI on. Please load and select a volume.")
-            return
-            
-        view_data_shape = current_img_item.image[self.image_view.currentIndex].shape # Y_orig, X_orig of current slice
-        roi_y_disp = view_data_shape[0] // 4 
-        roi_x_disp = view_data_shape[1] // 4 
-        roi_h_disp = view_data_shape[0] // 2
-        roi_w_disp = view_data_shape[1] // 2
+        if current_img_item is None or current_img_item.image is None: self.log_console.append("No image displayed to draw Stats ROI on."); return
+        view_data_shape = current_img_item.image[self.image_view.currentIndex].shape 
+        roi_y_disp = view_data_shape[0] // 4; roi_x_disp = view_data_shape[1] // 4; roi_h_disp = view_data_shape[0] // 2; roi_w_disp = view_data_shape[1] // 2
+        self.stats_roi_object = pg.RectROI(pos=(roi_x_disp, roi_y_disp), size=(roi_w_disp, roi_h_disp), pen=pg.mkPen('g', width=2), movable=True, resizable=True, hoverPen=pg.mkPen('m', width=2), rotatable=False)
+        self.image_view.addItem(self.stats_roi_object); self.stats_roi_object.sigRegionChangeFinished.connect(self.handle_stats_roi_updated); self.handle_stats_roi_updated(); self.save_stats_button.setEnabled(False) 
 
-        self.stats_roi_object = pg.RectROI(
-            pos=(roi_x_disp, roi_y_disp), 
-            size=(roi_w_disp, roi_h_disp), 
-            pen=pg.mkPen('g', width=2), # Green pen for Stats ROI
-            movable=True, resizable=True, hoverPen=pg.mkPen('m', width=2), rotatable=False
-        )
-        self.image_view.addItem(self.stats_roi_object)
-        self.stats_roi_object.sigRegionChangeFinished.connect(self.handle_stats_roi_updated)
-        self.handle_stats_roi_updated() # Initial calculation
-        self.save_stats_button.setEnabled(False) # Enable only after stats are valid and non-zero N
-
-    def handle_stats_roi_updated(self):
+    def handle_stats_roi_updated(self): # Unchanged
         if self.stats_roi_object is None: return
-        
         current_map_name = self.map_selector_combo.currentText()
-        if not current_map_name or current_map_name not in self.displayable_volumes:
-            self.log_console.append("Select a map first to calculate ROI statistics.")
-            self.stats_results_display.clear()
-            self.save_stats_button.setEnabled(False)
-            self.current_roi_stats = None
-            return
-            
+        if not current_map_name or current_map_name not in self.displayable_volumes: self.log_console.append("Select a map first to calculate ROI statistics."); self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
         img_item = self.image_view.getImageItem()
-        if img_item is None or img_item.image is None: 
-            self.stats_results_display.clear()
-            self.save_stats_button.setEnabled(False)
-            self.current_roi_stats = None
-            return
-
-        z_idx_display = self.image_view.currentIndex # This is the original Z index
-        
-        # Get the original 3D data for the currently selected map
+        if img_item is None or img_item.image is None: self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
+        z_idx_display = self.image_view.currentIndex 
         original_volume_data = self.displayable_volumes.get(current_map_name)
-        if original_volume_data is None or original_volume_data.ndim !=3 : # Stats only on 3D maps
-             self.log_console.append(f"Statistics ROI can only be applied to 3D parameter maps. '{current_map_name}' is not suitable.")
-             self.stats_results_display.setText(f"Stats ROI not applicable to '{current_map_name}'.")
-             self.save_stats_button.setEnabled(False)
-             self.current_roi_stats = None
-             return
-
-        current_slice_data_original_orientation = original_volume_data[:, :, z_idx_display] # X, Y for original Z slice
-
-        roi_state = self.stats_roi_object.getState()
-        # ROI coords from pg.RectROI are (x_disp, y_disp) for pos and size
-        # Displayed image is (Y_orig, X_orig) for the current slice Z_orig
-        # So, roi_state['pos'].x() is index along X_orig axis
-        # roi_state['pos'].y() is index along Y_orig axis
-        x_start_orig = int(round(roi_state['pos'].x()))
-        y_start_orig = int(round(roi_state['pos'].y()))
-        w_orig = int(round(roi_state['size'].x()))
-        h_orig = int(round(roi_state['size'].y()))
-
-        slice_cols_orig, slice_rows_orig = current_slice_data_original_orientation.shape # Shape is (X_orig, Y_orig)
-
+        if original_volume_data is None or original_volume_data.ndim !=3 : self.log_console.append(f"Statistics ROI can only be applied to 3D parameter maps. '{current_map_name}' is not suitable."); self.stats_results_display.setText(f"Stats ROI not applicable to '{current_map_name}'."); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
+        current_slice_data_original_orientation = original_volume_data[:, :, z_idx_display]
+        roi_state = self.stats_roi_object.getState(); x_start_orig = int(round(roi_state['pos'].x())); y_start_orig = int(round(roi_state['pos'].y())); w_orig = int(round(roi_state['size'].x())); h_orig = int(round(roi_state['size'].y()))
+        slice_cols_orig, slice_rows_orig = current_slice_data_original_orientation.shape 
         roi_mask_on_slice = np.zeros_like(current_slice_data_original_orientation, dtype=bool)
-
-        x_start_clipped = max(0, x_start_orig)
-        y_start_clipped = max(0, y_start_orig)
-        x_end_clipped = min(x_start_orig + w_orig, slice_cols_orig)
-        y_end_clipped = min(y_start_orig + h_orig, slice_rows_orig)
-
-        if y_start_clipped < y_end_clipped and x_start_clipped < x_end_clipped:
-            roi_mask_on_slice[x_start_clipped:x_end_clipped, y_start_clipped:y_end_clipped] = True
-        
+        x_start_clipped = max(0, x_start_orig); y_start_clipped = max(0, y_start_orig); x_end_clipped = min(x_start_orig + w_orig, slice_cols_orig); y_end_clipped = min(y_start_orig + h_orig, slice_rows_orig)
+        if y_start_clipped < y_end_clipped and x_start_clipped < x_end_clipped: roi_mask_on_slice[x_start_clipped:x_end_clipped, y_start_clipped:y_end_clipped] = True
         self.current_roi_stats = reporting.calculate_roi_statistics(current_slice_data_original_orientation, roi_mask_on_slice)
-        roi_name_str = f"StatsROI_slice{z_idx_display}"
-        formatted_stats_str = reporting.format_roi_statistics_to_string(self.current_roi_stats, current_map_name, roi_name_str)
-        self.stats_results_display.setText(formatted_stats_str)
-        self.log_console.append(f"Stats calculated for ROI on '{current_map_name}', slice {z_idx_display}.")
+        roi_name_str = f"StatsROI_slice{z_idx_display}"; formatted_stats_str = reporting.format_roi_statistics_to_string(self.current_roi_stats, current_map_name, roi_name_str)
+        self.stats_results_display.setText(formatted_stats_str); self.log_console.append(f"Stats calculated for ROI on '{current_map_name}', slice {z_idx_display}.")
         self.save_stats_button.setEnabled(self.current_roi_stats is not None and self.current_roi_stats.get("N_valid",0) > 0)
 
-
-    def handle_save_roi_stats(self):
-        if self.current_roi_stats is None or self.current_roi_stats.get("N_valid", 0) == 0:
-            self.log_console.append("No valid ROI statistics to save.")
-            return
-        
-        current_map_name = self.map_selector_combo.currentText()
-        # z_idx_display = self.image_view.currentIndex # Original Z index
-        # Get current slice from the stats_roi_object if possible, or use image_view's current index
-        # For simplicity, assume image_view.currentIndex is correct for the slice where stats were computed
-        z_idx_display = self.current_slice_index # or self.image_view.currentIndex
-
+    def handle_save_roi_stats(self): # Unchanged
+        if self.current_roi_stats is None or self.current_roi_stats.get("N_valid", 0) == 0: self.log_console.append("No valid ROI statistics to save."); return
+        current_map_name = self.map_selector_combo.currentText(); z_idx_display = self.current_slice_index
         roi_name_str = f"StatsROI_slice{z_idx_display}_on_{current_map_name.replace(' ','_').replace('(','').replace(')','')}"
-        default_filename = f"{roi_name_str}_stats.csv"
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save ROI Statistics", default_filename, "CSV files (*.csv)")
-        
+        default_filename = f"{roi_name_str}_stats.csv"; filepath, _ = QFileDialog.getSaveFileName(self, "Save ROI Statistics", default_filename, "CSV files (*.csv)")
         if filepath:
-            try: 
-                reporting.save_roi_statistics_csv(self.current_roi_stats, filepath, current_map_name, roi_name_str)
-                self.log_console.append(f"ROI statistics saved to {filepath}")
-            except Exception as e: 
-                self.log_console.append(f"Error saving ROI stats: {e}\n{traceback.format_exc()}")
-
+            try: reporting.save_roi_statistics_csv(self.current_roi_stats, filepath, current_map_name, roi_name_str); self.log_console.append(f"ROI statistics saved to {filepath}")
+            except Exception as e: self.log_console.append(f"Error saving ROI stats: {e}\n{traceback.format_exc()}")
 
 if __name__ == '__main__':
     if sys.platform.startswith('win'): 

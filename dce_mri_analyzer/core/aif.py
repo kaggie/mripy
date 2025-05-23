@@ -1,7 +1,7 @@
 import numpy as np
 import csv
 import os
-import json # Added for saving/loading ROI definitions
+import json 
 from ..core import conversion 
 
 def load_aif_from_file(filepath: str) -> tuple[np.ndarray, np.ndarray]:
@@ -117,16 +117,87 @@ def load_aif_from_file(filepath: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def parker_aif(time_points: np.ndarray, D=1.0, A1=0.809, m1=0.171, A2=0.330, m2=2.05) -> np.ndarray:
+    """
+    Implements a bi-exponential Parker Arterial Input Function (AIF).
+    This is a common simplification based on Parker et al. (2006), "Experimentally-derived
+    functional form for a population-averaged high-temporal-resolution arterial input function
+    for dynamic contrast-enhanced MRI". Magn Reson Med, 56(5), 993-1000.
+    The parameters (A1, m1, A2, m2) are typically used when time is in minutes.
+    The output concentration is scaled by D, which can incorporate dose and patient factors.
+
+    The formula used:
+    Cp(t) = D * (A1 * exp(-m1 * t) + A2 * exp(-m2 * t))
+
+    Args:
+        time_points (np.ndarray): Array of time points (units should be consistent
+                                   with m1, m2 units, typically minutes).
+        D (float, optional): Overall scaling factor (e.g., for dose or normalization). Defaults to 1.0.
+        A1 (float, optional): Amplitude of the first exponential term. Defaults to 0.809 (mM min).
+        m1 (float, optional): Decay rate of the first exponential term. Defaults to 0.171 (min⁻¹).
+        A2 (float, optional): Amplitude of the second exponential term. Defaults to 0.330 (mM min).
+        m2 (float, optional): Decay rate of the second exponential term. Defaults to 2.05 (min⁻¹).
+
+    Returns:
+        np.ndarray: Array of AIF concentration values corresponding to time_points.
+    
+    Raises:
+        TypeError: if time_points is not a NumPy array.
+        ValueError: if any of the parameters D, A1, A2, m1, m2 are negative.
+    """
     if not isinstance(time_points, np.ndarray):
         raise TypeError("time_points must be a NumPy array.")
     if D < 0 or A1 < 0 or A2 < 0 or m1 < 0 or m2 < 0 :
         raise ValueError("AIF parameters (D, A1, A2, m1, m2) must be non-negative.")
-    term1 = A1 * np.exp(-m1 * time_points)
-    term2 = A2 * np.exp(-m2 * time_points)
+    
+    valid_time_points = np.maximum(time_points, 0) # Ensure time is not negative for exp
+    term1 = A1 * np.exp(-m1 * valid_time_points)
+    term2 = A2 * np.exp(-m2 * valid_time_points)
     Cp_t = D * (term1 + term2)
     return Cp_t
 
-POPULATION_AIFS = {"parker": parker_aif}
+def weinmann_aif(time_points: np.ndarray, 
+                 D_scaler: float = 1.0, 
+                 A1: float = 3.99,  # Units: (mM * min) or similar depending on D_scaler and time units
+                 m1: float = 0.144, # Units: min^-1
+                 A2: float = 4.78,  # Units: (mM * min)
+                 m2: float = 0.0111 # Units: min^-1
+                ) -> np.ndarray:
+    '''
+    Weinmann population-averaged AIF.
+    A common bi-exponential form: Cp(t) = D_scaler * (A1*exp(-m1*t) + A2*exp(-m2*t)).
+    The default parameters (A1, m1, A2, m2) are based on Weinmann et al. (1982),
+    "Characteristics of Gadolinium-DTPA Complex: A Potential NMR Contrast Agent". 
+    Am J Roentgenol, 142(3), 619-624, often cited and adapted.
+    These parameters are typically used when time is in minutes, and D_scaler
+    can be used to adjust for dose (e.g., mmol/kg) and patient weight to yield mM.
+    For generic use, D_scaler can be 1.0 and the output is proportional to concentration.
+
+    Args:
+        time_points (np.ndarray): Time points for AIF calculation (typically in minutes).
+        D_scaler (float): General scaling factor (e.g., for dose/weight adjustment or normalization).
+        A1 (float): Amplitude/proportion of the first exponential component.
+        m1 (float): Rate constant of the first exponential component (typically min^-1).
+        A2 (float): Amplitude/proportion of the second exponential component.
+        m2 (float): Rate constant of the second exponential component (typically min^-1).
+    Returns:
+        np.ndarray: Concentration values for the AIF.
+    '''
+    if not isinstance(time_points, np.ndarray):
+        raise TypeError("time_points must be a NumPy array.")
+    if D_scaler < 0 or A1 < 0 or A2 < 0 or m1 < 0 or m2 < 0 :
+        raise ValueError("AIF parameters (D_scaler, A1, A2, m1, m2) must be non-negative.")
+    
+    valid_time_points = np.maximum(time_points, 0) # Ensure time is not negative
+    
+    term1 = A1 * np.exp(-m1 * valid_time_points)
+    term2 = A2 * np.exp(-m2 * valid_time_points)
+    return D_scaler * (term1 + term2)
+
+
+POPULATION_AIFS = {
+    "parker": parker_aif,
+    "weinmann": weinmann_aif,
+}
 
 def generate_population_aif(name: str, time_points: np.ndarray, params: dict = None) -> np.ndarray | None:
     if name in POPULATION_AIFS:
@@ -164,70 +235,22 @@ def extract_aif_from_roi(
     return aif_time_tc, aif_concentration_tc
 
 def save_aif_roi_definition(roi_properties: dict, filepath: str):
-    """
-    Saves AIF ROI properties to a JSON file.
-
-    Args:
-        roi_properties (dict): Dictionary containing ROI properties. Expected keys:
-                               "slice_index": int, "pos_x": float, "pos_y": float,
-                               "size_w": float, "size_h": float, "image_ref_name": str.
-        filepath (str): Path to save the JSON file.
-
-    Raises:
-        IOError: If there is an error writing the file.
-        TypeError: If roi_properties is not JSON serializable.
-    """
     try:
-        with open(filepath, 'w') as f:
-            json.dump(roi_properties, f, indent=4)
-    except (IOError, TypeError) as e: # Catch more specific errors if json.dump can raise them
-        raise IOError(f"Error saving AIF ROI definition to {filepath}: {e}")
+        with open(filepath, 'w') as f: json.dump(roi_properties, f, indent=4)
+    except (IOError, TypeError) as e: raise IOError(f"Error saving AIF ROI definition to {filepath}: {e}")
 
 def load_aif_roi_definition(filepath: str) -> dict | None:
-    """
-    Loads AIF ROI properties from a JSON file.
-
-    Args:
-        filepath (str): Path to the JSON file.
-
-    Returns:
-        dict | None: A dictionary containing the loaded ROI properties, or None if loading fails.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        ValueError: If the file is not valid JSON or missing required keys.
-        IOError: If there is an error reading the file.
-    """
     required_keys = ["slice_index", "pos_x", "pos_y", "size_w", "size_h", "image_ref_name"]
     try:
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        
-        if not isinstance(data, dict):
-            raise ValueError("ROI definition file does not contain a valid JSON object (dictionary).")
-
+        with open(filepath, 'r') as f: data = json.load(f)
+        if not isinstance(data, dict): raise ValueError("ROI definition file does not contain a valid JSON object (dictionary).")
         for key in required_keys:
-            if key not in data:
-                raise ValueError(f"Missing required key in AIF ROI definition file: '{key}'")
-        
-        # Optional type checks, though JSON loads numbers as float/int typically
+            if key not in data: raise ValueError(f"Missing required key in AIF ROI definition file: '{key}'")
         if not isinstance(data["slice_index"], int): raise ValueError("slice_index must be an integer.")
         if not all(isinstance(data[k], (int, float)) for k in ["pos_x", "pos_y", "size_w", "size_h"]):
             raise ValueError("ROI position/size values must be numeric.")
         if not isinstance(data["image_ref_name"], str): raise ValueError("image_ref_name must be a string.")
-
         return data
-    except FileNotFoundError:
-        # Let FileNotFoundError propagate or handle specifically if needed by UI
-        raise 
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Error decoding JSON from AIF ROI file {filepath}: {e}")
-    except IOError as e: # Catch read errors
-        raise IOError(f"Error reading AIF ROI definition from {filepath}: {e}")
-    # ValueError from key/type checks will also propagate
-    # Return None for other unexpected errors, or let them propagate
-    # For now, let specific exceptions propagate for clearer error messages in UI.
-    # If a generic "return None" is preferred for all errors:
-    # except Exception as e:
-    #     print(f"Failed to load AIF ROI definition: {e}") # Or log to console
-    #     return None
+    except FileNotFoundError: raise 
+    except json.JSONDecodeError as e: raise ValueError(f"Error decoding JSON from AIF ROI file {filepath}: {e}")
+    except IOError as e: raise IOError(f"Error reading AIF ROI definition from {filepath}: {e}")
