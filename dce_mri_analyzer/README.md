@@ -2,7 +2,7 @@
 
 ## Overview
 
-This tool is being developed to enable researchers and clinicians to load and manage DCE-MRI (Dynamic Contrast-Enhanced Magnetic Resonance Imaging) time-series data, convert raw signal intensity to contrast agent concentration, perform pharmacokinetic modeling, and visualize the results.
+This tool is being developed to enable researchers and clinicians to load and manage DCE-MRI (Dynamic Contrast-Enhanced Magnetic Resonance Imaging) time-series data, convert raw signal intensity to contrast agent concentration, perform pharmacokinetic modeling, and visualize and report the results.
 
 ## Current Features
 
@@ -18,17 +18,25 @@ This tool is being developed to enable researchers and clinicians to load and ma
     *   Selection of population-based AIF models (e.g., Parker).
     *   Interactive AIF definition by drawing an ROI on the displayed image (mean signal from ROI converted to concentration).
     *   Input fields for AIF-specific parameters (T10_blood, r1_blood, AIF baseline points).
+    *   Saving and loading of user-defined AIF ROI definitions (slice, position, size, reference image) to/from JSON files.
 *   **Pharmacokinetic Model Fitting:**
     *   Implementation of Standard Tofts model.
     *   Implementation of Extended Tofts model.
+    *   Added Patlak model for estimation of Ktrans (clearance) and vp (plasma volume).
     *   Voxel-wise fitting of selected model to tissue concentration curves, optionally constrained by a mask.
+    *   Parallelized voxel-wise pharmacokinetic model fitting using multiprocessing to leverage multiple CPU cores.
 *   **Parameter Map Generation & Export:**
-    *   Generation of 3D Ktrans, ve, (and vp for Extended Tofts) parameter maps.
+    *   Generation of 3D Ktrans, ve, (and vp for Extended Tofts), Ktrans_patlak, vp_patlak parameter maps.
     *   Export of these maps as NIfTI files, using a reference NIfTI (e.g., T1 map or original DCE) for spatial alignment and header information.
 *   **Visualization:**
     *   Display of loaded 3D/4D volumes (DCE, T1, Mask), generated concentration maps (mean over time), and pharmacokinetic parameter maps as 2D slices.
     *   Slice navigation using a slider.
     *   Interactive plotting of concentration-time curves for any selected voxel by double-clicking on the image viewer (plots tissue concentration, AIF, and the fitted model curve if available).
+*   **ROI Analysis & Reporting:**
+    *   Tools to draw ROIs on displayed parameter maps or other images for statistical analysis.
+    *   Calculation of basic statistics (mean, std, median, min, max, N, N_valid) for these ROIs.
+    *   Display of ROI statistics in the GUI.
+    *   Saving of ROI statistics to CSV files.
 *   **User Interface:**
     *   Basic Graphical User Interface (GUI) for all functionalities.
     *   Logging of operations, loaded file details, and any errors encountered.
@@ -66,26 +74,24 @@ This tool is being developed to enable researchers and clinicians to load and ma
     ```bash
     python main.py
     ```
+    On Windows, if using multiprocessing, it's good practice to ensure the script is run in a way that `multiprocessing.freeze_support()` can be effective, though it's included in `main.py`.
 
 ## Performance Note
-Currently, voxel-wise operations (like pharmacokinetic model fitting) are performed single-threaded. For large datasets, these operations can be time-consuming. Future enhancements may include parallelization to improve performance.
+Voxel-wise operations (like pharmacokinetic model fitting) can be time-consuming. The application now supports parallel processing for these operations to leverage multiple CPU cores, which can significantly reduce processing time. The number of cores can be selected in the UI.
 
 ## To Do / Future Enhancements
 
 *   **Advanced AIF Management:**
-    *   Saving user-defined ROIs for AIF.
+    *   Saving user-defined ROIs for AIF (currently saves definition, not the derived AIF curve itself).
     *   Integration of more population-based AIF models.
 *   **More Pharmacokinetic Models:**
     *   Implementation of other models (e.g., two-compartment exchange model).
 *   **Improved Visualization:**
     *   Overlaying parameter maps on anatomical images.
-    *   ROI drawing tools for statistics.
+    *   ROI drawing tools for statistics (currently a single RectROI, could be more complex shapes or multiple ROIs).
 *   **Batch Processing:**
     *   Ability to process multiple datasets via a script or batch interface.
-*   **Parallelization:**
-    *   Utilize multi-core processing for voxel-wise fitting to significantly speed up analysis.
 *   **Output and Reporting:**
-    *   Saving analysis reports (e.g., mean parameter values within ROIs).
-    *   More comprehensive export options.
+    *   More comprehensive export options (e.g., aggregated reports).
 
 This project aims to provide a user-friendly and modular tool for DCE-MRI analysis.

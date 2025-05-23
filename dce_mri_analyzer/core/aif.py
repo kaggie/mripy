@@ -1,7 +1,8 @@
 import numpy as np
 import csv
 import os
-from ..core import conversion # Added for signal_tc_to_concentration_tc
+import json # Added for saving/loading ROI definitions
+from ..core import conversion 
 
 def load_aif_from_file(filepath: str) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -116,157 +117,117 @@ def load_aif_from_file(filepath: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def parker_aif(time_points: np.ndarray, D=1.0, A1=0.809, m1=0.171, A2=0.330, m2=2.05) -> np.ndarray:
-    """
-    Implements a bi-exponential Parker Arterial Input Function (AIF).
-    This is a common simplification.
-
-    The formula used:
-    Cp(t) = D * (A1 * exp(-m1 * t) + A2 * exp(-m2 * t))
-
-    Args:
-        time_points (np.ndarray): Array of time points (units should be consistent
-                                   with m1, m2 units, e.g., minutes or seconds).
-        D (float, optional): Overall scaling factor. Defaults to 1.0.
-        A1 (float, optional): Amplitude of the first exponential term. Defaults to 0.809.
-        m1 (float, optional): Decay rate of the first exponential term. Defaults to 0.171.
-                               (Units should match 1/time_points units).
-        A2 (float, optional): Amplitude of the second exponential term. Defaults to 0.330.
-        m2 (float, optional): Decay rate of the second exponential term. Defaults to 2.05.
-                               (Units should match 1/time_points units).
-
-    Returns:
-        np.ndarray: Array of AIF concentration values corresponding to time_points.
-    
-    Raises:
-        TypeError: if time_points is not a NumPy array.
-        ValueError: if any of the parameters D, A1, A2, m1, m2 are negative.
-    """
     if not isinstance(time_points, np.ndarray):
         raise TypeError("time_points must be a NumPy array.")
     if D < 0 or A1 < 0 or A2 < 0 or m1 < 0 or m2 < 0 :
         raise ValueError("AIF parameters (D, A1, A2, m1, m2) must be non-negative.")
-
     term1 = A1 * np.exp(-m1 * time_points)
     term2 = A2 * np.exp(-m2 * time_points)
     Cp_t = D * (term1 + term2)
     return Cp_t
 
-POPULATION_AIFS = {
-    "parker": parker_aif,
-}
+POPULATION_AIFS = {"parker": parker_aif}
 
 def generate_population_aif(name: str, time_points: np.ndarray, params: dict = None) -> np.ndarray | None:
-    """
-    Generates an AIF using a predefined population model.
-
-    Args:
-        name (str): The name of the population AIF model to use (e.g., "parker").
-        time_points (np.ndarray): Array of time points for which to generate the AIF.
-        params (dict, optional): Dictionary of parameters to pass to the AIF model function.
-                                 If None, the model's default parameters will be used.
-                                 Example: {'D': 1.0, 'A1': 0.8, ...}
-
-    Returns:
-        np.ndarray | None: An array of AIF concentration values, or None if the
-                           model name is not found or if there's an error during generation.
-    Raises:
-        ValueError: if the model requires parameters not provided in the params dict
-                    or if parameters are of incorrect type for the model.
-    """
     if name in POPULATION_AIFS:
         model_function = POPULATION_AIFS[name]
         try:
-            if params:
-                return model_function(time_points, **params)
-            else:
-                return model_function(time_points) 
-        except TypeError as e:
-            raise ValueError(f"Error calling AIF model '{name}' with provided parameters: {e}")
-        except Exception as e: 
-            print(f"Unexpected error generating population AIF '{name}': {e}")
-            return None 
-    else:
-        return None
+            if params: return model_function(time_points, **params)
+            else: return model_function(time_points) 
+        except TypeError as e: raise ValueError(f"Error calling AIF model '{name}' with provided parameters: {e}")
+        except Exception as e: print(f"Unexpected error generating population AIF '{name}': {e}"); return None 
+    else: return None
 
 def extract_aif_from_roi(
     dce_4d_data: np.ndarray, 
-    roi_2d_coords: tuple, # (x_start, y_start, width, height) in original X, Y index space
+    roi_2d_coords: tuple, 
     slice_index_z: int, 
     t10_blood: float, 
     r1_blood: float, 
     TR: float,
     baseline_time_points_aif: int = 5 
 ) -> tuple[np.ndarray, np.ndarray]:
+    if dce_4d_data.ndim != 4: raise ValueError("dce_4d_data must be a 4D array.")
+    x_start, y_start, width, height = roi_2d_coords
+    if not (0 <= x_start < dce_4d_data.shape[0] and 0 <= y_start < dce_4d_data.shape[1] and 0 <= slice_index_z < dce_4d_data.shape[2]):
+        raise ValueError(f"ROI start coordinates or Z-slice index out of bounds for DCE data shape {dce_4d_data.shape}.")
+    if not (x_start + width <= dce_4d_data.shape[0] and y_start + height <= dce_4d_data.shape[1]):
+        raise ValueError(f"ROI dimensions exceed DCE data spatial bounds.")
+    if width <= 0 or height <= 0: raise ValueError("ROI width and height must be positive.")
+
+    roi_patch_3d = dce_4d_data[x_start : x_start + width, y_start : y_start + height, slice_index_z, :]
+    if roi_patch_3d.size == 0: raise ValueError("ROI patch is empty.")
+    mean_roi_signal_tc = np.mean(roi_patch_3d, axis=(0, 1)) 
+    if len(mean_roi_signal_tc) == 0: raise ValueError("Mean ROI signal time course is empty.")
+    aif_concentration_tc = conversion.signal_tc_to_concentration_tc(mean_roi_signal_tc, t10_blood, r1_blood, TR, baseline_time_points_aif)
+    aif_time_tc = np.arange(len(mean_roi_signal_tc)) * TR
+    return aif_time_tc, aif_concentration_tc
+
+def save_aif_roi_definition(roi_properties: dict, filepath: str):
     """
-    Extracts an Arterial Input Function (AIF) by averaging the signal within a
-    Region of Interest (ROI) in the DCE data and converting it to concentration.
+    Saves AIF ROI properties to a JSON file.
 
     Args:
-        dce_4d_data (np.ndarray): The 4D DCE image data (X, Y, Z, Time).
-        roi_2d_coords (tuple): (x_start, y_start, width, height) defining the ROI 
-                               in the original X, Y index space of the dce_4d_data.
-        slice_index_z (int): The Z index of the slice where the ROI is defined.
-        t10_blood (float): Pre-contrast T1 value of blood (in seconds).
-        r1_blood (float): Longitudinal relaxivity of the contrast agent in blood
-                          (e.g., in s⁻¹ mM⁻¹).
-        TR (float): Repetition Time (in seconds).
-        baseline_time_points_aif (int, optional): Number of initial time points
-                                                 to use for baseline calculation
-                                                 for the AIF. Defaults to 5.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: A tuple containing two NumPy arrays:
-                                       aif_time_tc (time points for the AIF) and
-                                       aif_concentration_tc (AIF concentrations).
+        roi_properties (dict): Dictionary containing ROI properties. Expected keys:
+                               "slice_index": int, "pos_x": float, "pos_y": float,
+                               "size_w": float, "size_h": float, "image_ref_name": str.
+        filepath (str): Path to save the JSON file.
 
     Raises:
-        ValueError: If ROI coordinates are out of bounds or parameters are invalid.
+        IOError: If there is an error writing the file.
+        TypeError: If roi_properties is not JSON serializable.
     """
-    if dce_4d_data.ndim != 4:
-        raise ValueError("dce_4d_data must be a 4D array.")
-    
-    x_start, y_start, width, height = roi_2d_coords
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(roi_properties, f, indent=4)
+    except (IOError, TypeError) as e: # Catch more specific errors if json.dump can raise them
+        raise IOError(f"Error saving AIF ROI definition to {filepath}: {e}")
 
-    # Validate coordinates against dce_4d_data.shape (X, Y, Z, T)
-    if not (0 <= x_start < dce_4d_data.shape[0] and \
-            0 <= y_start < dce_4d_data.shape[1] and \
-            0 <= slice_index_z < dce_4d_data.shape[2]):
-        raise ValueError(f"ROI start coordinates or Z-slice index out of bounds for DCE data shape {dce_4d_data.shape}.")
-    
-    if not (x_start + width <= dce_4d_data.shape[0] and \
-            y_start + height <= dce_4d_data.shape[1]):
-        raise ValueError(f"ROI dimensions (start+size) exceed DCE data spatial bounds. "
-                         f"X: {x_start}+{width} vs {dce_4d_data.shape[0]}, "
-                         f"Y: {y_start}+{height} vs {dce_4d_data.shape[1]}.")
-    if width <= 0 or height <= 0:
-        raise ValueError("ROI width and height must be positive.")
+def load_aif_roi_definition(filepath: str) -> dict | None:
+    """
+    Loads AIF ROI properties from a JSON file.
 
-    # Extract the 3D region for ROI: dce_4d_data[X, Y, Z, Time]
-    # ROI patch is (width_x, height_y, num_timepoints)
-    roi_patch_3d = dce_4d_data[x_start : x_start + width, 
-                               y_start : y_start + height, 
-                               slice_index_z, 
-                               :]
-    
-    if roi_patch_3d.size == 0: # Should be caught by width/height check, but as safeguard
-        raise ValueError("ROI patch is empty. Check ROI coordinates and dimensions.")
+    Args:
+        filepath (str): Path to the JSON file.
 
-    # Calculate mean_roi_signal_tc: average over X and Y axes of the patch
-    mean_roi_signal_tc = np.mean(roi_patch_3d, axis=(0, 1)) # Result is 1D array (time)
+    Returns:
+        dict | None: A dictionary containing the loaded ROI properties, or None if loading fails.
 
-    if len(mean_roi_signal_tc) == 0:
-        raise ValueError("Mean ROI signal time course is empty.")
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file is not valid JSON or missing required keys.
+        IOError: If there is an error reading the file.
+    """
+    required_keys = ["slice_index", "pos_x", "pos_y", "size_w", "size_h", "image_ref_name"]
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        if not isinstance(data, dict):
+            raise ValueError("ROI definition file does not contain a valid JSON object (dictionary).")
 
-    # Call conversion.signal_tc_to_concentration_tc
-    aif_concentration_tc = conversion.signal_tc_to_concentration_tc(
-        signal_tc=mean_roi_signal_tc,
-        t10_scalar=t10_blood,
-        r1_relaxivity=r1_blood,
-        TR=TR,
-        baseline_time_points=baseline_time_points_aif
-    )
+        for key in required_keys:
+            if key not in data:
+                raise ValueError(f"Missing required key in AIF ROI definition file: '{key}'")
+        
+        # Optional type checks, though JSON loads numbers as float/int typically
+        if not isinstance(data["slice_index"], int): raise ValueError("slice_index must be an integer.")
+        if not all(isinstance(data[k], (int, float)) for k in ["pos_x", "pos_y", "size_w", "size_h"]):
+            raise ValueError("ROI position/size values must be numeric.")
+        if not isinstance(data["image_ref_name"], str): raise ValueError("image_ref_name must be a string.")
 
-    # Create time vector for the AIF
-    aif_time_tc = np.arange(len(mean_roi_signal_tc)) * TR
-    
-    return aif_time_tc, aif_concentration_tc
+        return data
+    except FileNotFoundError:
+        # Let FileNotFoundError propagate or handle specifically if needed by UI
+        raise 
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Error decoding JSON from AIF ROI file {filepath}: {e}")
+    except IOError as e: # Catch read errors
+        raise IOError(f"Error reading AIF ROI definition from {filepath}: {e}")
+    # ValueError from key/type checks will also propagate
+    # Return None for other unexpected errors, or let them propagate
+    # For now, let specific exceptions propagate for clearer error messages in UI.
+    # If a generic "return None" is preferred for all errors:
+    # except Exception as e:
+    #     print(f"Failed to load AIF ROI definition: {e}") # Or log to console
+    #     return None
