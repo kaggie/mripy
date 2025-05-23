@@ -99,3 +99,49 @@ def load_mask(filepath: str, reference_shape: tuple = None):
             )
     data = img.get_fdata()
     return data.astype(bool)
+
+def save_nifti_map(data_map: np.ndarray, original_nifti_ref_path: str, output_filepath: str):
+    """
+    Saves a 3D data map as a NIfTI file, using an original NIfTI file for affine and header.
+
+    Args:
+        data_map (np.ndarray): The 3D NumPy array containing the parameter map data.
+        original_nifti_ref_path (str): Path to an original NIfTI file (e.g., T1 map or
+                                       one frame of DCE) to source affine and header.
+        output_filepath (str): The path where the new NIfTI map file will be saved.
+
+    Raises:
+        FileNotFoundError: If the original_nifti_ref_path does not exist.
+        Exception: Can re-raise exceptions from nibabel.load or nibabel.save.
+    """
+    if not os.path.exists(original_nifti_ref_path):
+        raise FileNotFoundError(f"Reference NIfTI file not found at: {original_nifti_ref_path}")
+
+    ref_nifti_img = nib.load(original_nifti_ref_path)
+
+    # Ensure data_map is 3D and matches spatial dimensions of reference
+    if data_map.ndim != 3:
+        raise ValueError(f"data_map must be a 3D array. Got {data_map.ndim} dimensions.")
+    if data_map.shape != ref_nifti_img.shape[:3]: # Compare with spatial part of ref shape
+        raise ValueError(f"data_map shape {data_map.shape} does not match "
+                         f"reference NIfTI spatial shape {ref_nifti_img.shape[:3]}.")
+
+    # Create new NIfTI image
+    # Use float32 for parameter maps typically.
+    # Copy header from original and update data type information if necessary.
+    new_header = ref_nifti_img.header.copy()
+    new_header.set_data_dtype(np.float32) 
+    # If original was 4D, ensure the new 3D map's header reflects 3D
+    if len(ref_nifti_img.shape) == 4 and len(data_map.shape) == 3:
+        new_header.set_data_shape(data_map.shape) # Update shape in header for 3D
+        # Remove 4th dimension related info if any (e.g. pixdim[4], dim[4])
+        # This is often handled by nibabel when creating Nifti1Image with 3D data
+        # but explicitly setting shape in header is good practice.
+        # new_header['dim'][0] = 3 # Number of dimensions
+        # new_header['dim'][4] = 1 # Size of 4th dim
+        # new_header['pixdim'][4] = 0 # Voxel size for 4th dim (or 1 if preferred)
+
+    new_nifti_image = nib.Nifti1Image(data_map.astype(np.float32), ref_nifti_img.affine, header=new_header)
+    
+    nib.save(new_nifti_image, output_filepath)
+    print(f"NIfTI map saved to: {output_filepath}") # For CLI confirmation, GUI will use log console
