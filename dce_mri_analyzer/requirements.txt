@@ -1,0 +1,4 @@
+nibabel
+numpy
+scipy
+PyQt5
