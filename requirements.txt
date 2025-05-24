@@ -7,3 +7,4 @@ scikit-image
 Pillow
 torch
 scipy
+pynetdicom>=2.0.0

@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
                 dicom_data = pydicom.dcmread(filepath)
                 image_data = dicom_data.pixel_array
                 print(f"Successfully loaded DICOM: {filename}, shape: {image_data.shape}")
+                self.display_dicom_metadata(filepath) # Call to display metadata
             elif extension in ['.nii', '.nii.gz']:
                 nifti_data = nibabel.load(filepath)
                 image_data = nifti_data.get_fdata()
@@ -219,22 +220,102 @@ class MainWindow(QMainWindow):
 
         super().keyPressEvent(event) # Pass on to default handler if not used
 
+    def display_dicom_metadata(self, filepath):
+        """Reads and displays key DICOM metadata in the metadata panel."""
+        try:
+            ds = pydicom.dcmread(filepath)
+            metadata_str = f"File: {os.path.basename(filepath)}\n\n"
+            metadata_str += f"Patient Name: {getattr(ds, 'PatientName', 'N/A')}\n"
+            metadata_str += f"Patient ID: {getattr(ds, 'PatientID', 'N/A')}\n"
+            metadata_str += f"Patient Birth Date: {getattr(ds, 'PatientBirthDate', 'N/A')}\n"
+            metadata_str += f"Patient Sex: {getattr(ds, 'PatientSex', 'N/A')}\n\n"
+            
+            metadata_str += f"Study UID: {getattr(ds, 'StudyInstanceUID', 'N/A')}\n"
+            metadata_str += f"Study Description: {getattr(ds, 'StudyDescription', 'N/A')}\n"
+            metadata_str += f"Study Date: {getattr(ds, 'StudyDate', 'N/A')}\n"
+            metadata_str += f"Study Time: {getattr(ds, 'StudyTime', 'N/A')}\n\n"
+            
+            metadata_str += f"Series UID: {getattr(ds, 'SeriesInstanceUID', 'N/A')}\n"
+            metadata_str += f"Series Description: {getattr(ds, 'SeriesDescription', 'N/A')}\n"
+            metadata_str += f"Series Number: {getattr(ds, 'SeriesNumber', 'N/A')}\n"
+            metadata_str += f"Modality: {getattr(ds, 'Modality', 'N/A')}\n\n"
+            
+            metadata_str += f"SOP Instance UID: {getattr(ds, 'SOPInstanceUID', 'N/A')}\n"
+            metadata_str += f"Instance Number: {getattr(ds, 'InstanceNumber', 'N/A')}\n"
+            metadata_str += f"Image Type: {getattr(ds, 'ImageType', 'N/A')}\n"
+            
+            # Access the QTextEdit widget within the metadata_panel_dock
+            metadata_text_edit = self.metadata_panel_dock.widget()
+            if isinstance(metadata_text_edit, QTextEdit):
+                metadata_text_edit.setText(metadata_str)
+            else:
+                print("Error: Metadata panel widget is not a QTextEdit.")
+            print(f"Displayed metadata for: {filepath}")
+        except Exception as e:
+            print(f"Error reading or displaying DICOM metadata for {filepath}: {e}")
+            metadata_text_edit = self.metadata_panel_dock.widget()
+            if isinstance(metadata_text_edit, QTextEdit):
+                metadata_text_edit.setText(f"Could not read metadata for {os.path.basename(filepath)}.\nError: {e}")
+
+    def open_specific_file(self, filepath):
+        """Opens a specific image file and displays it."""
+        print(f"Opening specific file: {filepath}")
+        if not os.path.exists(filepath):
+            print(f"Error: File not found at {filepath}")
+            return
+
+        image_data = self.load_image(filepath) # load_image now calls display_dicom_metadata if it's a DICOM
+        if image_data is not None:
+            self.image_view_widget.setImage(image_data)
+            print(f"Successfully displayed image from: {filepath}")
+            # If it's not a DICOM, metadata won't be shown by load_image, clear panel or show basic info
+            if not (filepath.lower().endswith('.dcm') or filepath.lower().endswith('.dicom')):
+                metadata_text_edit = self.metadata_panel_dock.widget()
+                if isinstance(metadata_text_edit, QTextEdit):
+                     metadata_text_edit.setText(f"File: {os.path.basename(filepath)}\n\n(Non-DICOM file, no detailed metadata to display)")
+        else:
+            print(f"Failed to load image data from: {filepath}")
+
+
     def load_plugins(self): # New method in MainWindow
         # Example of explicit plugin loading
         from plugins.mrsi_fitting_plugin import MRSIFittingPlugin # Import here to avoid circularity if plugin imports MainWindow
         from plugins.dmri_fitting_plugin import DMRICorePlugin # Added import for dMRI plugin
+        from plugins.pacs_plugin.pacs_plugin import PACSTransferPlugin # Added import for PACS plugin
         
         if not hasattr(self, 'loaded_plugins'):
             self.loaded_plugins = []
 
         # Load MRSI Plugin
-        mrsi_plugin = MRSIFittingPlugin()
-        mrsi_plugin.initialize(self)
-        self.loaded_plugins.append(mrsi_plugin)
-        print("Loaded MRSIFittingPlugin.")
+        try:
+            mrsi_plugin = MRSIFittingPlugin()
+            mrsi_plugin.initialize(self)
+            self.loaded_plugins.append(mrsi_plugin)
+            print("Loaded MRSIFittingPlugin.")
+        except ImportError:
+            print("MRSIFittingPlugin not found or could not be imported.")
+        except Exception as e:
+            print(f"Error loading MRSIFittingPlugin: {e}")
+
 
         # Load dMRI Plugin
-        dmri_plugin = DMRICorePlugin()
-        dmri_plugin.initialize(self)
-        self.loaded_plugins.append(dmri_plugin)
-        print("Loaded DMRICorePlugin.")
+        try:
+            dmri_plugin = DMRICorePlugin()
+            dmri_plugin.initialize(self)
+            self.loaded_plugins.append(dmri_plugin)
+            print("Loaded DMRICorePlugin.")
+        except ImportError:
+            print("DMRICorePlugin not found or could not be imported.")
+        except Exception as e:
+            print(f"Error loading DMRICorePlugin: {e}")
+
+        # Load PACS Transfer Plugin
+        try:
+            pacs_plugin = PACSTransferPlugin()
+            pacs_plugin.initialize(self)
+            self.loaded_plugins.append(pacs_plugin)
+            print("Loaded PACSTransferPlugin.")
+        except ImportError:
+            print("PACSTransferPlugin not found or could not be imported.")
+        except Exception as e:
+            print(f"Error loading PACSTransferPlugin: {e}")
