@@ -5,8 +5,10 @@ import nibabel as nib
 from scipy.interpolate import interp1d 
 from scipy.integrate import cumtrapz 
 import os 
+import functools 
 
 import pyqtgraph as pg 
+import pyqtgraph.exporters as pg_exporters # Import for plot saving
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -30,7 +32,7 @@ from PyQt5.QtCore import Qt, QPointF
 
 from ..core import io
 from ..core import conversion
-from ..core import aif
+from ..core import aif 
 from ..core import modeling 
 from ..core import reporting 
 
@@ -39,7 +41,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("DCE-MRI Analysis Tool")
-        self.setGeometry(100, 100, 1250, 900) # Increased height for overlay controls
+        self.setGeometry(100, 100, 1250, 900) 
 
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
@@ -49,11 +51,13 @@ class MainWindow(QMainWindow):
         self.Ct_data = None; self.dce_shape_for_validation = None
         self.dce_time_vector = None 
         self.dce_filepath = None; self.t1_filepath = None
+        self.tr_float = None 
         # AIF attributes
         self.aif_time = None; self.aif_concentration = None
         self.Cp_interp_func = None 
         self.integral_Cp_dt_interp_func = None 
-        self.population_aif_time_vector = np.linspace(0, 600, 300) 
+        self.population_aif_time_vector = np.linspace(0, 10, 121) 
+        self.aif_param_input_widgets = {} 
         # Model attributes
         self.selected_model_name = None
         self.parameter_maps = {} 
@@ -63,8 +67,8 @@ class MainWindow(QMainWindow):
         self.current_slice_index = 0
         self.aif_roi_object = None 
         # Stats ROI attributes
-        self.stats_roi_object = None
-        self.current_roi_stats = None
+        self.stats_roi_list = [] 
+        self.stats_roi_counter = 0 
         # Overlay attributes
         self.overlay_image_item = pg.ImageItem()
         self.current_overlay_map_key = "None"
@@ -94,7 +98,7 @@ class MainWindow(QMainWindow):
 
         self.right_panel_layout = QHBoxLayout() 
         self._create_display_area() 
-        self._create_log_console_and_plot_area() 
+        self._create_log_console_and_plot_area() # Modified to add save plot button
 
         self.main_layout.addLayout(self.left_panel_layout, stretch=1)
         self.main_layout.addLayout(self.right_panel_layout, stretch=3) 
@@ -104,6 +108,7 @@ class MainWindow(QMainWindow):
         
         self.update_aif_ui_state() 
         self.handle_model_selection() 
+        self.handle_population_aif_selection_changed() 
 
     def _connect_signals(self):
         self.load_dce_button.clicked.connect(self.load_dce_file)
@@ -112,6 +117,7 @@ class MainWindow(QMainWindow):
         self.run_button.clicked.connect(self.run_analysis)
         
         self.load_aif_button.clicked.connect(self.handle_load_aif_file)
+        self.save_derived_aif_button.clicked.connect(self.handle_save_derived_aif) 
         self.select_population_aif_button.clicked.connect(self.handle_apply_population_aif)
         self.aif_load_file_radio.toggled.connect(self.update_aif_ui_state)
         self.aif_population_radio.toggled.connect(self.update_aif_ui_state)
@@ -119,6 +125,7 @@ class MainWindow(QMainWindow):
         self.draw_aif_roi_button.clicked.connect(self.handle_draw_aif_roi_button) 
         self.save_aif_roi_button.clicked.connect(self.handle_save_aif_roi_def) 
         self.load_aif_roi_button.clicked.connect(self.handle_load_aif_roi_def) 
+        self.population_aif_combo.currentIndexChanged.connect(self.handle_population_aif_selection_changed) 
 
         self.model_standard_tofts_radio.toggled.connect(self.handle_model_selection)
         self.model_extended_tofts_radio.toggled.connect(self.handle_model_selection)
@@ -140,13 +147,18 @@ class MainWindow(QMainWindow):
         self.slice_slider.valueChanged.connect(self.handle_slice_changed)
         self.image_view.getView().scene().sigMouseClicked.connect(self.handle_voxel_clicked)
 
-        self.draw_stats_roi_button.clicked.connect(self.handle_draw_stats_roi)
-        self.save_stats_button.clicked.connect(self.handle_save_roi_stats)
+        # Stats ROI signals
+        self.add_stats_roi_button.clicked.connect(self.handle_add_stats_roi)
+        self.clear_last_stats_roi_button.clicked.connect(self.handle_clear_last_stats_roi)
+        self.clear_all_stats_rois_button.clicked.connect(self.handle_clear_all_stats_rois)
+        self.save_stats_button.clicked.connect(self.handle_save_all_roi_stats) 
 
-        # Overlay control signals
         self.overlay_map_selector_combo.currentIndexChanged.connect(self.handle_overlay_controls_changed)
         self.overlay_alpha_slider.valueChanged.connect(self.handle_overlay_controls_changed)
         self.overlay_cmap_combo.currentIndexChanged.connect(self.handle_overlay_controls_changed)
+        
+        self.tr_input.textChanged.connect(self.handle_tr_changed) 
+        self.save_plot_button.clicked.connect(self.handle_save_plot) # New
 
 
     def _create_file_io_section(self): # Unchanged
@@ -183,9 +195,10 @@ class MainWindow(QMainWindow):
         v_layout.addWidget(self.aif_population_radio)
         pop_aif_h_layout = QHBoxLayout()
         self.population_aif_combo = QComboBox(); pop_aif_h_layout.addWidget(self.population_aif_combo)
-        if aif.POPULATION_AIFS: self.population_aif_combo.addItems(aif.POPULATION_AIFS.keys())
+        if aif.POPULATION_AIFS: self.population_aif_combo.addItems(sorted(aif.POPULATION_AIFS.keys())) 
         self.select_population_aif_button = QPushButton("Apply"); pop_aif_h_layout.addWidget(self.select_population_aif_button)
         v_layout.addLayout(pop_aif_h_layout)
+        self.aif_params_group = QGroupBox("Population AIF Parameters"); self.aif_params_form_layout = QFormLayout(); self.aif_params_group.setLayout(self.aif_params_form_layout); v_layout.addWidget(self.aif_params_group); self.aif_params_group.setVisible(False) 
         v_layout.addWidget(self.aif_roi_radio) 
         roi_aif_controls_layout = QVBoxLayout() 
         roi_aif_buttons_layout = QHBoxLayout()
@@ -198,6 +211,7 @@ class MainWindow(QMainWindow):
         self.aif_r1_blood_input = QLineEdit("4.5"); roi_aif_form_layout.addRow(QLabel("AIF r1 Blood (s⁻¹mM⁻¹):"), self.aif_r1_blood_input)
         self.aif_baseline_points_input = QLineEdit("5"); roi_aif_form_layout.addRow(QLabel("AIF Baseline Points:"), self.aif_baseline_points_input)
         roi_aif_controls_layout.addLayout(roi_aif_form_layout); v_layout.addLayout(roi_aif_controls_layout)
+        self.save_derived_aif_button = QPushButton("Save Derived AIF Curve"); self.save_derived_aif_button.setEnabled(False); v_layout.addWidget(self.save_derived_aif_button)
         self.aif_status_label = QLabel("AIF: Not defined"); v_layout.addWidget(self.aif_status_label)
         self.aif_group.setLayout(v_layout)
 
@@ -234,9 +248,13 @@ class MainWindow(QMainWindow):
     def _create_roi_stats_section(self): # Unchanged
         self.roi_stats_group = QGroupBox("ROI Statistics")
         layout = QVBoxLayout()
-        self.draw_stats_roi_button = QPushButton("Draw/Reset Stats ROI"); layout.addWidget(self.draw_stats_roi_button)
-        self.stats_results_display = QTextEdit(); self.stats_results_display.setReadOnly(True); self.stats_results_display.setPlaceholderText("ROI statistics will appear here."); self.stats_results_display.setFixedHeight(150); layout.addWidget(self.stats_results_display)
-        self.save_stats_button = QPushButton("Save ROI Stats"); self.save_stats_button.setEnabled(False); layout.addWidget(self.save_stats_button)
+        roi_buttons_layout = QHBoxLayout()
+        self.add_stats_roi_button = QPushButton("Add Stats ROI"); roi_buttons_layout.addWidget(self.add_stats_roi_button)
+        self.clear_last_stats_roi_button = QPushButton("Clear Last ROI"); roi_buttons_layout.addWidget(self.clear_last_stats_roi_button)
+        self.clear_all_stats_rois_button = QPushButton("Clear All ROIs"); roi_buttons_layout.addWidget(self.clear_all_stats_rois_button)
+        layout.addLayout(roi_buttons_layout)
+        self.stats_results_display = QTextEdit(); self.stats_results_display.setReadOnly(True); self.stats_results_display.setPlaceholderText("ROI statistics for currently displayed map & slice will appear here."); self.stats_results_display.setFixedHeight(150); layout.addWidget(self.stats_results_display)
+        self.save_stats_button = QPushButton("Save All Visible ROI Stats"); self.save_stats_button.setEnabled(False); layout.addWidget(self.save_stats_button)
         self.roi_stats_group.setLayout(layout)
 
     def handle_model_selection(self): # Unchanged
@@ -257,179 +275,112 @@ class MainWindow(QMainWindow):
         self.run_button = QPushButton("Run Full Analysis (S->C & Voxel-wise Fitting)"); layout.addRow(self.run_button)
         self.processing_section.setLayout(layout)
 
-    def _create_display_area(self): # Modified
+    def _create_display_area(self): # Unchanged
         self.display_area_group = QGroupBox("Image Display") 
         display_layout = QVBoxLayout(self.display_area_group)
-
-        # Base Map Selector
         self.map_selector_combo = QComboBox(); display_layout.addWidget(self.map_selector_combo)
-        
-        # Slice Slider for Base Map
         slider_layout = QHBoxLayout()
         self.slice_slider_label = QLabel("Slice: 0/0")
         self.slice_slider = QSlider(Qt.Horizontal); self.slice_slider.setEnabled(False) 
         slider_layout.addWidget(QLabel("Slice:")); slider_layout.addWidget(self.slice_slider, 1); slider_layout.addWidget(self.slice_slider_label)
         display_layout.addLayout(slider_layout)
-
-        # PyQtGraph ImageView and Overlay Item
-        self.image_view = pg.ImageView()
-        # self.overlay_image_item is already created in __init__
-        self.image_view.getView().addItem(self.overlay_image_item)
-        self.overlay_image_item.setZValue(10) # Render on top
-        self.overlay_image_item.setVisible(False) # Initially hidden
-        display_layout.addWidget(self.image_view)
-        
-        # Overlay Controls
-        overlay_controls_layout = QHBoxLayout()
-        overlay_controls_layout.addWidget(QLabel("Overlay:"))
-        self.overlay_map_selector_combo = QComboBox()
-        self.overlay_map_selector_combo.addItem("None") # Default "None" option
-        overlay_controls_layout.addWidget(self.overlay_map_selector_combo)
-        
-        self.overlay_alpha_slider = QSlider(Qt.Horizontal)
-        self.overlay_alpha_slider.setRange(0, 100)
-        self.overlay_alpha_slider.setValue(int(self.overlay_alpha * 100))
-        overlay_controls_layout.addWidget(self.overlay_alpha_slider)
-        
-        self.overlay_alpha_label = QLabel(f"{self.overlay_alpha*100:.0f}%")
-        overlay_controls_layout.addWidget(self.overlay_alpha_label)
-        
-        overlay_controls_layout.addWidget(QLabel("Cmap:"))
-        self.overlay_cmap_combo = QComboBox()
-        self.overlay_cmap_combo.addItems(['viridis', 'jet', 'hot', 'coolwarm', 'magma', 'plasma', 'inferno', 'cividis'])
-        self.overlay_cmap_combo.setCurrentText(self.overlay_cmap_name)
-        overlay_controls_layout.addWidget(self.overlay_cmap_combo)
-        display_layout.addLayout(overlay_controls_layout) # Add overlay controls to display area
-
+        self.image_view = pg.ImageView(); self.image_view.getView().addItem(self.overlay_image_item); self.overlay_image_item.setZValue(10); self.overlay_image_item.setVisible(False); display_layout.addWidget(self.image_view)
+        overlay_controls_layout = QHBoxLayout(); overlay_controls_layout.addWidget(QLabel("Overlay:"))
+        self.overlay_map_selector_combo = QComboBox(); self.overlay_map_selector_combo.addItem("None"); overlay_controls_layout.addWidget(self.overlay_map_selector_combo)
+        self.overlay_alpha_slider = QSlider(Qt.Horizontal); self.overlay_alpha_slider.setRange(0, 100); self.overlay_alpha_slider.setValue(int(self.overlay_alpha * 100)); overlay_controls_layout.addWidget(self.overlay_alpha_slider)
+        self.overlay_alpha_label = QLabel(f"{self.overlay_alpha*100:.0f}%"); overlay_controls_layout.addWidget(self.overlay_alpha_label)
+        overlay_controls_layout.addWidget(QLabel("Cmap:")); self.overlay_cmap_combo = QComboBox(); self.overlay_cmap_combo.addItems(['viridis', 'jet', 'hot', 'coolwarm', 'magma', 'plasma', 'inferno', 'cividis']); self.overlay_cmap_combo.setCurrentText(self.overlay_cmap_name); overlay_controls_layout.addWidget(self.overlay_cmap_combo)
+        display_layout.addLayout(overlay_controls_layout) 
         self.right_panel_layout.addWidget(self.display_area_group, stretch=2)
 
-    def _create_log_console_and_plot_area(self): # Unchanged
+    def _create_log_console_and_plot_area(self): # Modified
         plot_log_group = QGroupBox("Plots and Log")
         plot_log_layout = QVBoxLayout(plot_log_group)
+
+        # Plot Widget and Save Button
+        plot_area_layout = QVBoxLayout() # Use QVBoxLayout for plot and its button
         self.plot_widget = pg.PlotWidget(); self.plot_widget.setLabel('bottom', 'Time'); self.plot_widget.setLabel('left', 'Concentration'); self.plot_widget.addLegend(offset=(-10,10)) 
-        plot_log_layout.addWidget(self.plot_widget, stretch=1)
+        plot_area_layout.addWidget(self.plot_widget, stretch=1) # Plot takes most space in this sub-layout
+        
+        self.save_plot_button = QPushButton("Save Current Plot")
+        self.save_plot_button.setEnabled(False) # Initially disabled
+        plot_area_layout.addWidget(self.save_plot_button) # Add button below plot
+        
+        plot_log_layout.addLayout(plot_area_layout, stretch=1) # Add plot area to main group
+
+        # Log Console
         self.log_console = QTextEdit(); self.log_console.setReadOnly(True); plot_log_layout.addWidget(self.log_console, stretch=1)
         self.right_panel_layout.addWidget(plot_log_group, stretch=1)
 
-    def update_displayable_volume(self, name: str, data: np.ndarray): # Modified
+    def update_displayable_volume(self, name: str, data: np.ndarray): # Unchanged
         if data is None: return
-        self.displayable_volumes[name] = data
-        
-        # Update base map selector
-        current_base_selection = self.map_selector_combo.currentText()
-        self.map_selector_combo.blockSignals(True)
-        self.map_selector_combo.clear()
-        self.map_selector_combo.addItems(self.displayable_volumes.keys())
-        idx_base = self.map_selector_combo.findText(name) # Try to select new/updated map
+        self.displayable_volumes[name] = data; current_base_selection = self.map_selector_combo.currentText()
+        self.map_selector_combo.blockSignals(True); self.map_selector_combo.clear(); self.map_selector_combo.addItems(self.displayable_volumes.keys())
+        idx_base = self.map_selector_combo.findText(name) 
         if idx_base != -1: self.map_selector_combo.setCurrentIndex(idx_base)
-        elif current_base_selection and self.map_selector_combo.findText(current_base_selection) != -1:
-            self.map_selector_combo.setCurrentText(current_base_selection)
+        elif current_base_selection and self.map_selector_combo.findText(current_base_selection) != -1: self.map_selector_combo.setCurrentText(current_base_selection)
         self.map_selector_combo.blockSignals(False)
-        
-        # Update overlay map selector
         current_overlay_selection = self.overlay_map_selector_combo.currentText()
-        self.overlay_map_selector_combo.blockSignals(True)
-        self.overlay_map_selector_combo.clear()
-        self.overlay_map_selector_combo.addItem("None")
+        self.overlay_map_selector_combo.blockSignals(True); self.overlay_map_selector_combo.clear(); self.overlay_map_selector_combo.addItem("None")
         for vol_name, vol_data in self.displayable_volumes.items():
-            if vol_data.ndim == 3: # Only 3D maps for overlay
-                self.overlay_map_selector_combo.addItem(vol_name)
+            if vol_data.ndim == 3: self.overlay_map_selector_combo.addItem(vol_name)
         idx_overlay = self.overlay_map_selector_combo.findText(current_overlay_selection)
         if idx_overlay != -1: self.overlay_map_selector_combo.setCurrentIndex(idx_overlay)
-        else: self.overlay_map_selector_combo.setCurrentIndex(0) # Default to "None"
+        else: self.overlay_map_selector_combo.setCurrentIndex(0) 
         self.overlay_map_selector_combo.blockSignals(False)
+        if self.map_selector_combo.currentText() == name: self.handle_map_selection_changed() 
 
-        # Trigger display update if the newly added map is now the current base map
-        if self.map_selector_combo.currentText() == name: 
-            self.handle_map_selection_changed() 
-        # No automatic update of overlay here, user action via handle_overlay_controls_changed
-
-    def handle_overlay_controls_changed(self): # New
-        self.current_overlay_map_key = self.overlay_map_selector_combo.currentText()
-        self.overlay_alpha = self.overlay_alpha_slider.value() / 100.0
-        self.overlay_alpha_label.setText(f"{self.overlay_alpha*100:.0f}%")
-        self.overlay_cmap_name = self.overlay_cmap_combo.currentText()
+    def handle_overlay_controls_changed(self): # Unchanged
+        self.current_overlay_map_key = self.overlay_map_selector_combo.currentText(); self.overlay_alpha = self.overlay_alpha_slider.value() / 100.0
+        self.overlay_alpha_label.setText(f"{self.overlay_alpha*100:.0f}%"); self.overlay_cmap_name = self.overlay_cmap_combo.currentText()
         self.update_overlay_image_display()
 
-    def update_overlay_image_display(self): # New
-        if self.current_overlay_map_key is None or self.current_overlay_map_key == "None":
-            self.overlay_image_item.clear()
-            self.overlay_image_item.setVisible(False)
-            return
-
-        overlay_volume_data = self.displayable_volumes.get(self.current_overlay_map_key)
-        base_image_item = self.image_view.getImageItem() # Main image item in ImageView
-
-        if overlay_volume_data is None or base_image_item is None or base_image_item.image is None:
-            self.overlay_image_item.clear()
-            self.overlay_image_item.setVisible(False)
-            return
-
-        current_slice_idx = self.image_view.currentIndex # Slice from base image view
-
-        if overlay_volume_data.ndim == 3:
-            overlay_data_permuted = overlay_volume_data.transpose(2,1,0) # Z,Y,X
-        else: # Only allow 3D maps for overlay
-            self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
-            
-        if not (0 <= current_slice_idx < overlay_data_permuted.shape[0]):
-            self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return 
-
+    def update_overlay_image_display(self): # Unchanged
+        if self.current_overlay_map_key is None or self.current_overlay_map_key == "None": self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        overlay_volume_data = self.displayable_volumes.get(self.current_overlay_map_key); base_image_item = self.image_view.getImageItem()
+        if overlay_volume_data is None or base_image_item is None or base_image_item.image is None: self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        current_slice_idx = self.image_view.currentIndex 
+        if overlay_volume_data.ndim == 3: overlay_data_permuted = overlay_volume_data.transpose(2,1,0) 
+        else: self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        if not (0 <= current_slice_idx < overlay_data_permuted.shape[0]): self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return 
         overlay_slice_to_display = overlay_data_permuted[current_slice_idx]
-        
         self.overlay_image_item.setImage(overlay_slice_to_display, autoLevels=False) 
-        cmap = pg.colormap.get(self.overlay_cmap_name)
-        lut = cmap.getLookupTable(alpha=True) # Use alpha from LUT if cmap supports it
-            
-        min_val = np.nanmin(overlay_slice_to_display) 
-        max_val = np.nanmax(overlay_slice_to_display)
+        cmap = pg.colormap.get(self.overlay_cmap_name); lut = cmap.getLookupTable(alpha=True) 
+        min_val = np.nanmin(overlay_slice_to_display); max_val = np.nanmax(overlay_slice_to_display)
         if np.isnan(min_val) or np.isnan(max_val) or min_val == max_val: 
-            # Use full volume stats for levels if slice is flat/NaN, for consistency
-            min_val_vol = np.nanmin(overlay_volume_data)
-            max_val_vol = np.nanmax(overlay_volume_data)
-            if np.isnan(min_val_vol) or np.isnan(max_val_vol) or min_val_vol == max_val_vol:
-                self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+            min_val_vol = np.nanmin(overlay_volume_data); max_val_vol = np.nanmax(overlay_volume_data)
+            if np.isnan(min_val_vol) or np.isnan(max_val_vol) or min_val_vol == max_val_vol: self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
             min_val, max_val = min_val_vol, max_val_vol
+        self.overlay_image_item.setLookupTable(lut); self.overlay_image_item.setLevels([min_val, max_val]); self.overlay_image_item.setOpacity(self.overlay_alpha); self.overlay_image_item.setVisible(True)
 
-        self.overlay_image_item.setLookupTable(lut)
-        self.overlay_image_item.setLevels([min_val, max_val])
-        self.overlay_image_item.setOpacity(self.overlay_alpha)
-        self.overlay_image_item.setVisible(True)
-
-
-    def handle_map_selection_changed(self): # Modified
-        if self.stats_roi_object: self.image_view.removeItem(self.stats_roi_object); self.stats_roi_object = None; self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; self.log_console.append("Stats ROI cleared due to map change.")
+    def handle_map_selection_changed(self): # Unchanged
         selected_key = self.map_selector_combo.currentText()
-        if not selected_key: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        if not selected_key: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); self.update_all_rois_stats_display(); return
         self.current_display_key = selected_key; volume_data = self.displayable_volumes.get(self.current_display_key)
-        if volume_data is None: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
+        if volume_data is None: self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); self.update_all_rois_stats_display(); return
         display_data = None
         if volume_data.ndim == 3: display_data = volume_data.transpose(2, 1, 0)
         elif volume_data.ndim == 4: mean_over_time = np.mean(volume_data, axis=3); display_data = mean_over_time.transpose(2, 1, 0)
-        else: self.log_console.append(f"Volume '{selected_key}' unsupported dim: {volume_data.ndim}."); self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); return
-        
+        else: self.log_console.append(f"Volume '{selected_key}' unsupported dim: {volume_data.ndim}."); self.image_view.clear(); self.slice_slider.setEnabled(False); self.slice_slider_label.setText("Slice: 0/0"); self.overlay_image_item.clear(); self.overlay_image_item.setVisible(False); self.update_all_rois_stats_display(); return
         self.image_view.setImage(display_data, autoRange=True, autoLevels=True, autoHistogramRange=True)
         num_slices = display_data.shape[0]
         self.slice_slider.setEnabled(True); self.slice_slider.setMinimum(0); self.slice_slider.setMaximum(num_slices - 1)
-        current_idx = min(self.current_slice_index, num_slices - 1)
-        if current_idx < 0: current_idx = 0
-        self.image_view.setCurrentIndex(current_idx); self.slice_slider.setValue(current_idx)
-        self.slice_slider_label.setText(f"Slice: {current_idx + 1}/{num_slices}")
-        
-        self.update_overlay_image_display() # Update overlay when base map changes
+        current_idx = self.image_view.currentIndex 
+        if not (0 <= current_idx < num_slices): current_idx = 0 
+        self.image_view.setCurrentIndex(current_idx); self.slice_slider.setValue(current_idx); self.slice_slider_label.setText(f"Slice: {current_idx + 1}/{num_slices}")
+        self.update_overlay_image_display(); self.update_all_rois_stats_display() 
 
-    def handle_slice_changed(self, value): # Modified
+    def handle_slice_changed(self, value): # Unchanged
         self.current_slice_index = value
         if self.image_view.image is not None:
             num_slices = self.image_view.image.shape[0]; safe_value = np.clip(value, 0, num_slices - 1)
             self.image_view.setCurrentIndex(safe_value); self.slice_slider_label.setText(f"Slice: {safe_value + 1}/{num_slices}")
             if value != safe_value and self.slice_slider.value() != safe_value : self.slice_slider.setValue(safe_value)
-            if self.stats_roi_object: self.handle_stats_roi_updated()
-            self.update_overlay_image_display() # Update overlay when slice changes
+            self.update_all_rois_stats_display(); self.update_overlay_image_display() 
 
-
-    def handle_voxel_clicked(self, mouse_click_event): # Unchanged
+    def handle_voxel_clicked(self, mouse_click_event): # Modified to update save plot button
         if not mouse_click_event.double(): return 
+        self.save_plot_button.setEnabled(False) # Disable first
         image_item = self.image_view.getImageItem(); 
         if image_item is None or image_item.image is None: return
         scene_pos = mouse_click_event.scenePos(); img_coords_float = image_item.mapFromScene(scene_pos)
@@ -441,13 +392,13 @@ class MainWindow(QMainWindow):
         if self.Ct_data is None or not (0 <= x_orig < self.Ct_data.shape[0] and 0 <= y_orig < self.Ct_data.shape[1] and 0 <= z_orig < self.Ct_data.shape[2]): self.log_console.append(f"Clicked coords ({x_orig},{y_orig},{z_orig}) outside Ct_data bounds."); return
         self.plot_selected_voxel_curves(x_orig, y_orig, z_orig)
 
-    def plot_selected_voxel_curves(self, x_idx, y_idx, z_idx): # Unchanged
+    def plot_selected_voxel_curves(self, x_idx, y_idx, z_idx): # Modified to update save plot button
         self.plot_widget.clear(); self.plot_widget.setTitle(f"Curves for Voxel (X:{x_idx}, Y:{y_idx}, Z:{z_idx})")
-        if self.Ct_data is None: self.log_console.append("Ct data not available for plotting."); return
+        if self.Ct_data is None: self.log_console.append("Ct data not available for plotting."); self.save_plot_button.setEnabled(False); return
         Ct_voxel = self.Ct_data[x_idx, y_idx, z_idx, :]; t_values = self.dce_time_vector
         if t_values is None: 
             try: tr_val = float(self.tr_input.text()); num_time_points = self.Ct_data.shape[3]; t_values = np.arange(num_time_points) * tr_val
-            except ValueError: self.log_console.append("TR value invalid for plotting time axis."); return
+            except ValueError: self.log_console.append("TR value invalid for plotting time axis."); self.save_plot_button.setEnabled(False); return
         self.plot_widget.plot(t_values, Ct_voxel, pen=pg.mkPen('b', width=2), name='Tissue Conc.')
         if self.aif_time is not None and self.aif_concentration is not None: self.plot_widget.plot(self.aif_time, self.aif_concentration, pen='r', name='AIF')
         if self.selected_model_name and self.parameter_maps and self.Cp_interp_func: 
@@ -477,13 +428,16 @@ class MainWindow(QMainWindow):
             elif valid_params and fitted_curve is None: self.log_console.append(f"Fit parameters valid but curve generation failed for {self.selected_model_name} at ({x_idx},{y_idx},{z_idx}).")
             else: self.log_console.append(f"No valid pre-fitted parameters for voxel ({x_idx},{y_idx},{z_idx}) for {self.selected_model_name}.")
         self.plot_widget.autoRange()
+        self.save_plot_button.setEnabled(bool(self.plot_widget.getPlotItem().listDataItems()))
 
     def update_aif_ui_state(self): # Unchanged
         is_file_mode = self.aif_load_file_radio.isChecked(); is_pop_mode = self.aif_population_radio.isChecked(); is_roi_mode = self.aif_roi_radio.isChecked()
         self.load_aif_button.setEnabled(is_file_mode); self.aif_file_label.setEnabled(is_file_mode)
-        self.population_aif_combo.setEnabled(is_pop_mode); self.select_population_aif_button.setEnabled(is_pop_mode)
+        self.population_aif_combo.setEnabled(is_pop_mode); self.select_population_aif_button.setEnabled(is_pop_mode); self.aif_params_group.setVisible(is_pop_mode) 
+        if is_pop_mode: self.handle_population_aif_selection_changed() 
         self.draw_aif_roi_button.setEnabled(is_roi_mode); self.save_aif_roi_button.setEnabled(is_roi_mode and self.aif_roi_object is not None); self.load_aif_roi_button.setEnabled(is_roi_mode)
         self.aif_t10_blood_input.setEnabled(is_roi_mode); self.aif_r1_blood_input.setEnabled(is_roi_mode); self.aif_baseline_points_input.setEnabled(is_roi_mode)
+        self.save_derived_aif_button.setEnabled(self.aif_time is not None and self.aif_concentration is not None)
         if not is_roi_mode and self.aif_roi_object: self.image_view.removeItem(self.aif_roi_object); self.aif_roi_object = None; self.log_console.append("AIF ROI removed from image."); self.save_aif_roi_button.setEnabled(False)
 
     def _create_aif_interpolators(self): # Unchanged
@@ -498,6 +452,19 @@ class MainWindow(QMainWindow):
         if self.aif_time is not None: self.log_console.append("AIF time or concentration has insufficient points for interpolation."); return False
         return False
 
+    def handle_population_aif_selection_changed(self): # Unchanged
+        for i in reversed(range(self.aif_params_form_layout.rowCount())): self.aif_params_form_layout.removeRow(i) 
+        self.aif_param_input_widgets.clear()
+        selected_aif_name = self.population_aif_combo.currentText()
+        if not selected_aif_name or not self.aif_population_radio.isChecked(): self.aif_params_group.setVisible(False); return
+        self.aif_params_group.setVisible(True); param_meta_list = aif.AIF_PARAMETER_METADATA.get(selected_aif_name, [])
+        if not param_meta_list: self.log_console.append(f"No parameter metadata found for AIF model: {selected_aif_name}"); return
+        for param_name, default_val, min_val, max_val, tooltip in param_meta_list:
+            label = QLabel(f"{param_name}:"); line_edit = QLineEdit(str(default_val))
+            if tooltip: label.setToolTip(tooltip); line_edit.setToolTip(tooltip)
+            self.aif_params_form_layout.addRow(label, line_edit); self.aif_param_input_widgets[param_name] = line_edit
+        self.log_console.append(f"Parameter fields generated for {selected_aif_name} AIF.")
+
     def handle_load_aif_file(self): # Unchanged
         filepath, _ = QFileDialog.getOpenFileName(self, "Load AIF File", "", "AIF Files (*.txt *.csv)")
         if filepath:
@@ -506,30 +473,27 @@ class MainWindow(QMainWindow):
                 if self._create_aif_interpolators(): self.aif_file_label.setText(os.path.basename(filepath)); self.aif_status_label.setText(f"AIF: Loaded from file. Points: {len(self.aif_time)}"); self.log_console.append("AIF loaded successfully from file.")
                 else: self.aif_time, self.aif_concentration = None, None; self.aif_file_label.setText("Error creating interpolator."); self.aif_status_label.setText("AIF: Error processing.")
             except Exception as e: self.aif_time, self.aif_concentration, self.Cp_interp_func, self.integral_Cp_dt_interp_func = None, None, None, None; self.aif_file_label.setText("Error loading AIF."); self.aif_status_label.setText("AIF: Error loading."); self.log_console.append(f"Error loading AIF from file: {e}\n{traceback.format_exc()}")
+            self.update_aif_ui_state() 
 
     def handle_apply_population_aif(self): # Unchanged
-        model_name = self.population_aif_combo.currentText()
-        if not model_name: self.log_console.append("No population AIF model selected."); return
-        current_time_vector = self.dce_time_vector if self.dce_time_vector is not None else self.population_aif_time_vector
-        self.log_console.append(f"Applying population AIF: {model_name} with {len(current_time_vector)} points.")
+        selected_aif_name = self.population_aif_combo.currentText()
+        if not selected_aif_name or selected_aif_name == "None": self.log_console.append("Please select a population AIF model."); return
+        aif_params = {}
         try:
-            aif_c = aif.generate_population_aif(model_name, current_time_vector)
+            for param_name, line_edit_widget in self.aif_param_input_widgets.items(): aif_params[param_name] = float(line_edit_widget.text())
+        except ValueError: self.log_console.append("Invalid character in AIF parameters. Please enter numbers only."); return
+        time_vector_for_aif = self.dce_time_vector if self.dce_time_vector is not None else self.population_aif_time_vector
+        if self.dce_time_vector is None: self.log_console.append(f"Warning: Using default/fallback time vector for AIF generation ({len(time_vector_for_aif)} points).")
+        self.log_console.append(f"Applying population AIF: {selected_aif_name} with params: {aif_params}")
+        try:
+            aif_c = aif.generate_population_aif(selected_aif_name, time_vector_for_aif, params=aif_params)
             if aif_c is not None:
-                self.aif_time, self.aif_concentration = current_time_vector, aif_c
-                if self._create_aif_interpolators(): self.aif_status_label.setText(f"AIF: Applied '{model_name}'. Points: {len(self.aif_time)}"); self.log_console.append(f"Population AIF '{model_name}' applied.")
-                else: self.aif_time, self.aif_concentration = None, None; self.aif_status_label.setText(f"AIF: Error processing '{model_name}'.")
-            else: self.aif_time, self.aif_concentration, self.Cp_interp_func, self.integral_Cp_dt_interp_func = None, None, None, None; self.aif_status_label.setText(f"AIF: Error applying '{model_name}'."); self.log_console.append(f"Failed to generate population AIF: {model_name}.")
-        except Exception as e: self.aif_time, self.aif_concentration, self.Cp_interp_func, self.integral_Cp_dt_interp_func = None, None, None, None; self.aif_status_label.setText(f"AIF: Error applying '{model_name}'."); self.log_console.append(f"Error applying population AIF: {e}\n{traceback.format_exc()}")
-
-    def handle_draw_aif_roi_button(self): # Unchanged
-        if self.image_view.getImageItem().image is None: self.log_console.append("No image displayed to draw ROI on."); return
-        if self.aif_roi_object: self.image_view.removeItem(self.aif_roi_object); self.aif_roi_object = None 
-        current_display_data = self.image_view.getImageItem().image; slice_shape_yx = current_display_data[self.image_view.currentIndex].shape 
-        roi_x_disp = slice_shape_yx[1] // 4; roi_y_disp = slice_shape_yx[0] // 4; roi_w_disp = slice_shape_yx[1] // 2; roi_h_disp = slice_shape_yx[0] // 2
-        self.aif_roi_object = pg.RectROI(pos=(roi_x_disp, roi_y_disp), size=(roi_w_disp, roi_h_disp), pen='r', movable=True, resizable=True, rotatable=False, hoverPen='m')
-        self.image_view.addItem(self.aif_roi_object); self.aif_roi_object.sigRegionChangeFinished.connect(self.handle_aif_roi_processing) 
-        self.log_console.append("AIF ROI created/reset. Adjust it on the image."); self.handle_aif_roi_processing()
-        self.save_aif_roi_button.setEnabled(True) 
+                self.aif_time, self.aif_concentration = time_vector_for_aif, aif_c
+                if self._create_aif_interpolators(): self.aif_status_label.setText(f"AIF: Applied '{selected_aif_name}'. Points: {len(self.aif_time)}"); self.log_console.append(f"Population AIF '{selected_aif_name}' applied successfully."); self.plot_widget.clear(); self.plot_widget.plot(self.aif_time, self.aif_concentration, pen='r', name=f'{selected_aif_name} AIF (Custom)'); self.plot_widget.autoRange()
+                else: self.aif_time, self.aif_concentration = None, None; self.aif_status_label.setText(f"AIF: Error processing '{selected_aif_name}'.")
+            else: self.aif_time, self.aif_concentration, self.Cp_interp_func, self.integral_Cp_dt_interp_func = None, None, None, None; self.aif_status_label.setText(f"AIF: Error applying '{selected_aif_name}'."); self.log_console.append(f"Failed to generate population AIF: {selected_aif_name}.")
+        except Exception as e: self.aif_time, self.aif_concentration, self.Cp_interp_func, self.integral_Cp_dt_interp_func = None, None, None, None; self.aif_status_label.setText(f"AIF: Error applying '{selected_aif_name}'."); self.log_console.append(f"Error applying population AIF: {e}\n{traceback.format_exc()}")
+        self.update_aif_ui_state()
 
     def handle_aif_roi_processing(self): # Unchanged
         if self.aif_roi_object is None or self.dce_data is None: self.log_console.append("AIF ROI or DCE data not available for processing."); return
@@ -549,6 +513,24 @@ class MainWindow(QMainWindow):
             else: self.aif_time, self.aif_concentration = None, None; self.aif_status_label.setText("AIF: Error processing ROI AIF.")
         except ValueError as ve: self.log_console.append(f"Invalid AIF ROI parameters: {ve}")
         except Exception as e: self.log_console.append(f"Error processing AIF ROI: {e}\n{traceback.format_exc()}")
+        self.update_aif_ui_state()
+
+    def handle_save_derived_aif(self): # Unchanged
+        if self.aif_time is None or self.aif_concentration is None: self.log_console.append("No derived AIF curve available to save."); return
+        filepath, _ = QFileDialog.getSaveFileName(self, "Save Derived AIF Curve", "", "CSV files (*.csv);;Text files (*.txt)")
+        if filepath:
+            try: aif.save_aif_curve(self.aif_time, self.aif_concentration, filepath); self.log_console.append(f"Derived AIF curve saved to {filepath}")
+            except Exception as e: self.log_console.append(f"Error saving derived AIF curve: {e}\n{traceback.format_exc()}")
+
+    def handle_draw_aif_roi_button(self): # Unchanged
+        if self.image_view.getImageItem().image is None: self.log_console.append("No image displayed to draw ROI on."); return
+        if self.aif_roi_object: self.image_view.removeItem(self.aif_roi_object); self.aif_roi_object = None 
+        current_display_data = self.image_view.getImageItem().image; slice_shape_yx = current_display_data[self.image_view.currentIndex].shape 
+        roi_x_disp = slice_shape_yx[1] // 4; roi_y_disp = slice_shape_yx[0] // 4; roi_w_disp = slice_shape_yx[1] // 2; roi_h_disp = slice_shape_yx[0] // 2
+        self.aif_roi_object = pg.RectROI(pos=(roi_x_disp, roi_y_disp), size=(roi_w_disp, roi_h_disp), pen='r', movable=True, resizable=True, rotatable=False, hoverPen='m')
+        self.image_view.addItem(self.aif_roi_object); self.aif_roi_object.sigRegionChangeFinished.connect(self.handle_aif_roi_processing) 
+        self.log_console.append("AIF ROI created/reset. Adjust it on the image."); self.handle_aif_roi_processing()
+        self.save_aif_roi_button.setEnabled(True) 
 
     def handle_save_aif_roi_def(self): # Unchanged
         if self.aif_roi_object is None or not self.aif_roi_radio.isChecked(): self.log_console.append("No active AIF ROI to save or ROI mode not selected."); return
@@ -584,8 +566,25 @@ class MainWindow(QMainWindow):
                 self.image_view.addItem(self.aif_roi_object); self.aif_roi_object.sigRegionChangeFinished.connect(self.handle_aif_roi_processing); self.handle_aif_roi_processing() 
                 self.log_console.append(f"AIF ROI definition loaded from {filepath} and applied."); self.save_aif_roi_button.setEnabled(True) 
             except Exception as e: self.log_console.append(f"Error loading AIF ROI: {e}\n{traceback.format_exc()}")
+            
+    def handle_tr_changed(self, text): # Modified to store self.tr_float
+        try:
+            tr_val = float(text)
+            if tr_val <=0 : 
+                self.tr_float = None; self.log_console.append("TR must be positive.")
+                self.dce_time_vector = None # Invalidate time vector
+            else: 
+                self.tr_float = tr_val
+                self.log_console.append(f"TR set to: {self.tr_float} s")
+                if self.dce_data is not None:
+                    self.dce_time_vector = np.arange(self.dce_data.shape[3]) * self.tr_float
+                    self.log_console.append(f"DCE time vector updated based on new TR: {len(self.dce_time_vector)} points.")
+        except ValueError:
+            self.tr_float = None
+            self.dce_time_vector = None
+            # self.log_console.append("Invalid TR value entered.") # Optional: can be noisy
 
-    def load_dce_file(self): # Unchanged
+    def load_dce_file(self): # Modified to use self.tr_float
         filepath, _ = QFileDialog.getOpenFileName(self, "Load DCE NIfTI File", "", "NIfTI Files (*.nii *.nii.gz)")
         if filepath:
             self.dce_filepath = filepath 
@@ -593,13 +592,12 @@ class MainWindow(QMainWindow):
                 self.log_console.append(f"Loading DCE series: {filepath}"); self.dce_data = io.load_dce_series(filepath) 
                 self.dce_shape_for_validation = self.dce_data.shape; self.dce_path_label.setText(os.path.basename(filepath))
                 self.log_console.append(f"DCE series loaded. Shape: {self.dce_data.shape}"); self.update_displayable_volume("Original DCE (Mean)", np.mean(self.dce_data, axis=3))
-                try:
-                    tr_val_str = self.tr_input.text()
-                    if not tr_val_str: self.log_console.append("TR not set. DCE time vector not defined."); self.dce_time_vector = None; return
-                    tr_val = float(tr_val_str)
-                    if tr_val > 0: self.dce_time_vector = np.arange(self.dce_data.shape[3]) * tr_val; self.log_console.append(f"DCE time vector defined: {len(self.dce_time_vector)} points, TR={tr_val}s.")
-                    else: self.log_console.append("TR not positive. DCE time vector not defined."); self.dce_time_vector = None
-                except ValueError: self.log_console.append("TR invalid. DCE time vector not defined."); self.dce_time_vector = None
+                if self.tr_float is not None and self.tr_float > 0: # Use already validated tr_float
+                    self.dce_time_vector = np.arange(self.dce_data.shape[3]) * self.tr_float
+                    self.log_console.append(f"DCE time vector defined: {len(self.dce_time_vector)} points, TR={self.tr_float}s.")
+                else: 
+                    self.dce_time_vector = None # Explicitly set to None
+                    self.log_console.append("TR not set or invalid at DCE load. DCE time vector not defined.")
             except Exception as e: self.dce_data, self.dce_shape_for_validation, self.dce_time_vector, self.dce_filepath = None, None, None, None; self.dce_path_label.setText("Error loading file"); self.log_console.append(f"Error loading DCE: {e}\n{traceback.format_exc()}")
 
     def load_t1_file(self): # Unchanged
@@ -627,13 +625,13 @@ class MainWindow(QMainWindow):
         if self.aif_time is None or self.aif_concentration is None: self.log_console.append("Error: AIF not defined/loaded."); self.display_label.setText("Analysis failed: AIF not defined."); return
         if not self._create_aif_interpolators(): self.log_console.append("Error: Failed to create AIF interpolators. Cannot run analysis."); self.display_label.setText("Analysis failed: AIF interpolation error."); return
         try:
-            r1_val = float(self.r1_input.text()); tr_val = float(self.tr_input.text()); baseline_pts = int(self.baseline_points_input.text())
-            if r1_val <= 0 or tr_val <= 0 or baseline_pts <= 0: raise ValueError("Params must be positive.")
+            r1_val = float(self.r1_input.text()); tr_val_run = float(self.tr_input.text()); baseline_pts = int(self.baseline_points_input.text()) 
+            if r1_val <= 0 or tr_val_run <= 0 or baseline_pts <= 0: raise ValueError("Params must be positive.")
             if baseline_pts >= self.dce_data.shape[3]: raise ValueError("Baseline points exceed total time points.")
         except ValueError as e: self.log_console.append(f"Error: Invalid conversion parameters: {e}"); self.display_label.setText(f"Analysis failed: Invalid params ({e})."); return
-        self.log_console.append(f"Starting S-to-C conversion: r1={r1_val}, TR={tr_val}, baseline={baseline_pts}"); QApplication.processEvents()
+        self.log_console.append(f"Starting S-to-C conversion: r1={r1_val}, TR={tr_val_run}, baseline={baseline_pts}"); QApplication.processEvents()
         try:
-            self.Ct_data = conversion.signal_to_concentration(self.dce_data, self.t10_data, r1_val, tr_val, baseline_pts)
+            self.Ct_data = conversion.signal_to_concentration(self.dce_data, self.t10_data, r1_val, tr_val_run, baseline_pts)
             self.log_console.append(f"S-to-C conversion successful. Ct_data shape: {self.Ct_data.shape}"); self.display_label.setText(f"Conversion successful. Ct shape: {self.Ct_data.shape}")
             self.update_displayable_volume("Ct (Concentration Mean)", np.mean(self.Ct_data, axis=3))
         except Exception as e: self.log_console.append(f"Error during S-to-C: {e}\n{traceback.format_exc()}"); self.display_label.setText("Conversion failed."); self.Ct_data = None; return
@@ -645,8 +643,8 @@ class MainWindow(QMainWindow):
         self.display_label.setText(f"Fitting {self.selected_model_name} voxel-wise (up to {num_cores_to_use} cores)... This may take a while."); QApplication.processEvents()
         t_tissue = self.dce_time_vector 
         if t_tissue is None: 
-             if tr_val > 0: t_tissue = np.arange(self.Ct_data.shape[3]) * tr_val
-             else: self.log_console.append("Error: Cannot determine t_tissue for fitting."); self.display_label.setText("Fitting failed: t_tissue unknown."); return
+             if self.tr_float and self.tr_float > 0: t_tissue = np.arange(self.Ct_data.shape[3]) * self.tr_float
+             else: self.log_console.append("Error: Cannot determine t_tissue for fitting (TR invalid)."); self.display_label.setText("Fitting failed: t_tissue unknown."); return
         mask_to_use = self.mask_data if self.mask_data is not None else None; self.parameter_maps = {} 
         try:
             if self.selected_model_name == "Standard Tofts": self.parameter_maps = modeling.fit_standard_tofts_voxelwise(self.Ct_data, t_tissue, self.aif_time, self.aif_concentration, mask=mask_to_use, num_processes=num_cores_to_use)
@@ -684,43 +682,92 @@ class MainWindow(QMainWindow):
                 self.log_console.append(f"{map_name} map saved successfully."); self.display_label.setText(f"{map_name} map saved to {os.path.basename(output_filepath)}")
             except Exception as e: self.log_console.append(f"Error saving {map_name} map: {e}\n{traceback.format_exc()}"); self.display_label.setText(f"Error saving {map_name} map. See log.")
 
-    def handle_draw_stats_roi(self): # Unchanged
-        if self.stats_roi_object: self.image_view.removeItem(self.stats_roi_object); self.stats_roi_object = None
+    def handle_add_stats_roi(self): # Unchanged
         current_img_item = self.image_view.getImageItem()
         if current_img_item is None or current_img_item.image is None: self.log_console.append("No image displayed to draw Stats ROI on."); return
+        self.stats_roi_counter += 1; roi_name = f"StatsROI_{self.stats_roi_counter}"
         view_data_shape = current_img_item.image[self.image_view.currentIndex].shape 
         roi_y_disp = view_data_shape[0] // 4; roi_x_disp = view_data_shape[1] // 4; roi_h_disp = view_data_shape[0] // 2; roi_w_disp = view_data_shape[1] // 2
-        self.stats_roi_object = pg.RectROI(pos=(roi_x_disp, roi_y_disp), size=(roi_w_disp, roi_h_disp), pen=pg.mkPen('g', width=2), movable=True, resizable=True, hoverPen=pg.mkPen('m', width=2), rotatable=False)
-        self.image_view.addItem(self.stats_roi_object); self.stats_roi_object.sigRegionChangeFinished.connect(self.handle_stats_roi_updated); self.handle_stats_roi_updated(); self.save_stats_button.setEnabled(False) 
+        roi_colors = ['#32CD32', '#FFFF00', '#00FFFF', '#FF00FF', '#FFA500', '#DA70D6']; pen_color = roi_colors[(len(self.stats_roi_list)) % len(roi_colors)] 
+        new_roi_item = pg.RectROI(pos=(roi_x_disp, roi_y_disp), size=(roi_w_disp, roi_h_disp), pen=pg.mkPen(pen_color, width=2), movable=True, resizable=True, hoverPen=pg.mkPen(pen_color, width=3), rotatable=False)
+        self.image_view.addItem(new_roi_item)
+        roi_entry = {'item': new_roi_item, 'name': roi_name, 'stats': None, 'slice_idx': self.image_view.currentIndex, 'map_name': self.map_selector_combo.currentText()}
+        self.stats_roi_list.append(roi_entry)
+        new_roi_item.sigRegionChangeFinished.connect(functools.partial(self.handle_specific_stats_roi_updated, roi_entry))
+        self.handle_specific_stats_roi_updated(roi_entry); self.update_all_rois_stats_display(); self.save_stats_button.setEnabled(True) 
 
-    def handle_stats_roi_updated(self): # Unchanged
-        if self.stats_roi_object is None: return
-        current_map_name = self.map_selector_combo.currentText()
-        if not current_map_name or current_map_name not in self.displayable_volumes: self.log_console.append("Select a map first to calculate ROI statistics."); self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
+    def handle_specific_stats_roi_updated(self, roi_entry_to_update): # Unchanged
+        roi_item_changed = roi_entry_to_update['item']; current_map_name_view = self.map_selector_combo.currentText(); current_slice_idx_view = self.image_view.currentIndex
+        roi_entry_to_update['map_name'] = current_map_name_view; roi_entry_to_update['slice_idx'] = current_slice_idx_view
         img_item = self.image_view.getImageItem()
-        if img_item is None or img_item.image is None: self.stats_results_display.clear(); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
-        z_idx_display = self.image_view.currentIndex 
-        original_volume_data = self.displayable_volumes.get(current_map_name)
-        if original_volume_data is None or original_volume_data.ndim !=3 : self.log_console.append(f"Statistics ROI can only be applied to 3D parameter maps. '{current_map_name}' is not suitable."); self.stats_results_display.setText(f"Stats ROI not applicable to '{current_map_name}'."); self.save_stats_button.setEnabled(False); self.current_roi_stats = None; return
-        current_slice_data_original_orientation = original_volume_data[:, :, z_idx_display]
-        roi_state = self.stats_roi_object.getState(); x_start_orig = int(round(roi_state['pos'].x())); y_start_orig = int(round(roi_state['pos'].y())); w_orig = int(round(roi_state['size'].x())); h_orig = int(round(roi_state['size'].y()))
+        if img_item is None or img_item.image is None: roi_entry_to_update['stats'] = None; self.update_all_rois_stats_display(); return
+        original_volume_data = self.displayable_volumes.get(roi_entry_to_update['map_name'])
+        if original_volume_data is None or original_volume_data.ndim !=3 : roi_entry_to_update['stats'] = None; self.update_all_rois_stats_display(); return
+        current_slice_data_original_orientation = original_volume_data[:, :, roi_entry_to_update['slice_idx']]
+        roi_state = roi_item_changed.getState(); x_start_orig = int(round(roi_state['pos'].x())); y_start_orig = int(round(roi_state['pos'].y())); w_orig = int(round(roi_state['size'].x())); h_orig = int(round(roi_state['size'].y()))
         slice_cols_orig, slice_rows_orig = current_slice_data_original_orientation.shape 
         roi_mask_on_slice = np.zeros_like(current_slice_data_original_orientation, dtype=bool)
         x_start_clipped = max(0, x_start_orig); y_start_clipped = max(0, y_start_orig); x_end_clipped = min(x_start_orig + w_orig, slice_cols_orig); y_end_clipped = min(y_start_orig + h_orig, slice_rows_orig)
         if y_start_clipped < y_end_clipped and x_start_clipped < x_end_clipped: roi_mask_on_slice[x_start_clipped:x_end_clipped, y_start_clipped:y_end_clipped] = True
-        self.current_roi_stats = reporting.calculate_roi_statistics(current_slice_data_original_orientation, roi_mask_on_slice)
-        roi_name_str = f"StatsROI_slice{z_idx_display}"; formatted_stats_str = reporting.format_roi_statistics_to_string(self.current_roi_stats, current_map_name, roi_name_str)
-        self.stats_results_display.setText(formatted_stats_str); self.log_console.append(f"Stats calculated for ROI on '{current_map_name}', slice {z_idx_display}.")
-        self.save_stats_button.setEnabled(self.current_roi_stats is not None and self.current_roi_stats.get("N_valid",0) > 0)
+        calculated_stats = reporting.calculate_roi_statistics(current_slice_data_original_orientation, roi_mask_on_slice)
+        roi_entry_to_update['stats'] = calculated_stats
+        self.update_all_rois_stats_display()
 
-    def handle_save_roi_stats(self): # Unchanged
-        if self.current_roi_stats is None or self.current_roi_stats.get("N_valid", 0) == 0: self.log_console.append("No valid ROI statistics to save."); return
-        current_map_name = self.map_selector_combo.currentText(); z_idx_display = self.current_slice_index
-        roi_name_str = f"StatsROI_slice{z_idx_display}_on_{current_map_name.replace(' ','_').replace('(','').replace(')','')}"
-        default_filename = f"{roi_name_str}_stats.csv"; filepath, _ = QFileDialog.getSaveFileName(self, "Save ROI Statistics", default_filename, "CSV files (*.csv)")
+    def update_all_rois_stats_display(self): # Unchanged
+        full_stats_text = []; current_map_name_view = self.map_selector_combo.currentText(); current_slice_idx_view = self.image_view.currentIndex
+        any_roi_has_valid_stats = False 
+        for roi_entry in self.stats_roi_list:
+            if roi_entry['map_name'] == current_map_name_view and roi_entry['slice_idx'] == current_slice_idx_view: self.handle_specific_stats_roi_updated(roi_entry) 
+            if roi_entry['stats']:
+                formatted_str = reporting.format_roi_statistics_to_string(roi_entry['stats'], roi_entry['map_name'], roi_entry['name'])
+                full_stats_text.append(formatted_str)
+                if roi_entry['stats'].get("N_valid",0) > 0: any_roi_has_valid_stats = True 
+            else: full_stats_text.append(f"{roi_entry['name']}: Defined on {roi_entry['map_name']} slice {roi_entry['slice_idx']}. (Stats not yet calculated or N/A)")
+        self.stats_results_display.setText("\n\n".join(full_stats_text) if full_stats_text else "No ROIs defined. Add ROIs using 'Add Stats ROI' button.")
+        self.save_stats_button.setEnabled(any_roi_has_valid_stats) 
+
+    def handle_clear_last_stats_roi(self): # Unchanged
+        if self.stats_roi_list:
+            last_roi_entry = self.stats_roi_list.pop()
+            if last_roi_entry['item'] in self.image_view.getView().allChildren(): self.image_view.removeItem(last_roi_entry['item'])
+            self.log_console.append(f"Removed {last_roi_entry['name']}."); self.update_all_rois_stats_display()
+        if not self.stats_roi_list: self.save_stats_button.setEnabled(False)
+
+    def handle_clear_all_stats_rois(self): # Unchanged
+        for roi_entry in self.stats_roi_list:
+            if roi_entry['item'] in self.image_view.getView().allChildren(): self.image_view.removeItem(roi_entry['item'])
+        self.stats_roi_list.clear(); self.stats_roi_counter = 0
+        self.log_console.append("Cleared all Stats ROIs."); self.update_all_rois_stats_display(); self.save_stats_button.setEnabled(False)
+
+    def handle_save_all_roi_stats(self): # Unchanged
+        stats_to_save = []
+        for roi_entry in self.stats_roi_list:
+            if roi_entry['stats'] and roi_entry['stats'].get("N_valid",0) > 0: stats_to_save.append((roi_entry['map_name'], roi_entry['slice_idx'], roi_entry['name'], roi_entry['stats']))
+        if not stats_to_save: self.log_console.append("No valid ROI statistics from any view to save."); return
+        first_map_name = stats_to_save[0][0].replace(' ','_').replace('(','').replace(')',''); default_filename = f"all_roi_stats_from_{first_map_name}.csv"
+        filepath, _ = QFileDialog.getSaveFileName(self, "Save All ROI Statistics", default_filename, "CSV files (*.csv)")
         if filepath:
-            try: reporting.save_roi_statistics_csv(self.current_roi_stats, filepath, current_map_name, roi_name_str); self.log_console.append(f"ROI statistics saved to {filepath}")
+            try: reporting.save_multiple_roi_statistics_csv(stats_to_save, filepath); self.log_console.append(f"Multiple ROI statistics saved to {filepath}")
             except Exception as e: self.log_console.append(f"Error saving ROI stats: {e}\n{traceback.format_exc()}")
+            
+    def handle_save_plot(self): # New
+        if self.plot_widget.getPlotItem().listDataItems(): # Check if there's something plotted
+            try:
+                exporter = pg_exporters.ImageExporter(self.plot_widget.getPlotItem())
+                filepath, selected_filter = QFileDialog.getSaveFileName(
+                    self, "Save Plot", "", 
+                    "PNG files (*.png);;JPEG files (*.jpg *.jpeg);;SVG files (*.svg);;TIFF files (*.tif);;All files (*)"
+                )
+                if filepath:
+                    exporter.export(filepath)
+                    self.log_console.append(f"Plot saved to {filepath}")
+            except ImportError:
+                self.log_console.append("Error: PyQtGraph ImageExporter not found. Please ensure pyqtgraph is fully installed with exporter dependencies if needed.")
+            except Exception as e:
+                self.log_console.append(f"Error saving plot: {e}\n{traceback.format_exc()}")
+        else:
+            self.log_console.append("No plot available to save.")
+
 
 if __name__ == '__main__':
     if sys.platform.startswith('win'): 

@@ -83,61 +83,138 @@ class TestAifFunctions(unittest.TestCase):
         with open(filepath, 'w') as f: f.write("Time\tConcentration\n")
         with self.assertRaisesRegex(ValueError, "No numeric data found"): aif.load_aif_from_file(filepath)
 
+    def test_save_aif_curve(self):
+        """Test saving AIF curve to CSV and TXT files."""
+        times = np.array([0, 1, 2, 3.5], dtype=float)
+        concentrations = np.array([0.0, 0.15, 0.25, 0.1], dtype=float)
+
+        for ext, delimiter in [(".csv", ","), (".txt", "\t")]:
+            with self.subTest(extension=ext):
+                tmp_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=self.test_dir, mode='w')
+                tmp_file_path = tmp_file.name
+                tmp_file.close()
+
+                aif.save_aif_curve(times, concentrations, tmp_file_path)
+
+                with open(tmp_file_path, 'r', newline='') as f:
+                    reader = csv.reader(f, delimiter=delimiter)
+                    header = next(reader)
+                    self.assertEqual(header, ['Time', 'Concentration'])
+                    loaded_data = list(reader)
+                    self.assertEqual(len(loaded_data), len(times))
+                    for i, row in enumerate(loaded_data):
+                        self.assertAlmostEqual(float(row[0]), times[i])
+                        self.assertAlmostEqual(float(row[1]), concentrations[i])
+                os.remove(tmp_file_path)
+        
+        # Test error for unequal length arrays
+        with self.assertRaises(ValueError):
+            aif.save_aif_curve(np.array([1,2]), np.array([1,2,3]), "test.csv")
+
+
     def test_parker_aif(self):
         """Test Parker AIF generation for specific time points (time in minutes)."""
-        # Parker parameters (default): D=1.0, A1=0.809, m1=0.171, A2=0.330, m2=2.05
         expected_concs = np.array([
-            1.0 * (0.809 * np.exp(-0.171*0.0) + 0.330 * np.exp(-2.05*0.0)), # t=0
-            1.0 * (0.809 * np.exp(-0.171*0.1) + 0.330 * np.exp(-2.05*0.1)), # t=0.1
-            1.0 * (0.809 * np.exp(-0.171*0.5) + 0.330 * np.exp(-2.05*0.5)), # t=0.5
-            1.0 * (0.809 * np.exp(-0.171*1.0) + 0.330 * np.exp(-2.05*1.0)), # t=1.0
-            1.0 * (0.809 * np.exp(-0.171*2.0) + 0.330 * np.exp(-2.05*2.0)), # t=2.0
-            1.0 * (0.809 * np.exp(-0.171*5.0) + 0.330 * np.exp(-2.05*5.0)), # t=5.0
+            1.0 * (0.809 * np.exp(-0.171*0.0) + 0.330 * np.exp(-2.05*0.0)), 
+            1.0 * (0.809 * np.exp(-0.171*0.1) + 0.330 * np.exp(-2.05*0.1)), 
+            1.0 * (0.809 * np.exp(-0.171*0.5) + 0.330 * np.exp(-2.05*0.5)), 
+            1.0 * (0.809 * np.exp(-0.171*1.0) + 0.330 * np.exp(-2.05*1.0)), 
+            1.0 * (0.809 * np.exp(-0.171*2.0) + 0.330 * np.exp(-2.05*2.0)), 
+            1.0 * (0.809 * np.exp(-0.171*5.0) + 0.330 * np.exp(-2.05*5.0)), 
         ])
         generated_concs = aif.parker_aif(self.time_points_minutes)
         np.testing.assert_array_almost_equal(generated_concs, expected_concs, decimal=5)
 
     def test_weinmann_aif(self):
         """Test Weinmann AIF generation for specific time points (time in minutes)."""
-        # Weinmann parameters (default): D_scaler=1.0, A1=3.99, m1=0.144, A2=4.78, m2=0.0111
         expected_concs = np.array([
-            1.0 * (3.99 * np.exp(-0.144*0.0) + 4.78 * np.exp(-0.0111*0.0)), # t=0
-            1.0 * (3.99 * np.exp(-0.144*0.1) + 4.78 * np.exp(-0.0111*0.1)), # t=0.1
-            1.0 * (3.99 * np.exp(-0.144*0.5) + 4.78 * np.exp(-0.0111*0.5)), # t=0.5
-            1.0 * (3.99 * np.exp(-0.144*1.0) + 4.78 * np.exp(-0.0111*1.0)), # t=1.0
-            1.0 * (3.99 * np.exp(-0.144*2.0) + 4.78 * np.exp(-0.0111*2.0)), # t=2.0
-            1.0 * (3.99 * np.exp(-0.144*5.0) + 4.78 * np.exp(-0.0111*5.0)), # t=5.0
+            1.0 * (3.99 * np.exp(-0.144*0.0) + 4.78 * np.exp(-0.0111*0.0)), 
+            1.0 * (3.99 * np.exp(-0.144*0.1) + 4.78 * np.exp(-0.0111*0.1)), 
+            1.0 * (3.99 * np.exp(-0.144*0.5) + 4.78 * np.exp(-0.0111*0.5)), 
+            1.0 * (3.99 * np.exp(-0.144*1.0) + 4.78 * np.exp(-0.0111*1.0)), 
+            1.0 * (3.99 * np.exp(-0.144*2.0) + 4.78 * np.exp(-0.0111*2.0)), 
+            1.0 * (3.99 * np.exp(-0.144*5.0) + 4.78 * np.exp(-0.0111*5.0)), 
         ])
         generated_concs = aif.weinmann_aif(self.time_points_minutes)
         np.testing.assert_array_almost_equal(generated_concs, expected_concs, decimal=5)
 
-        # Test with D_scaler
-        D_test = 0.5
-        generated_concs_scaled = aif.weinmann_aif(self.time_points_minutes, D_scaler=D_test)
-        np.testing.assert_array_almost_equal(generated_concs_scaled, expected_concs * D_test, decimal=5)
+    def test_fast_biexponential_aif(self):
+        """Test Fast Bi-exponential AIF generation (time in minutes)."""
+        # Default params: D_scaler=1.0, A1=0.6, m1=3.0, A2=0.4, m2=0.3
+        expected_concs = np.array([
+            1.0 * (0.6 * np.exp(-3.0*0.0) + 0.4 * np.exp(-0.3*0.0)), # t=0
+            1.0 * (0.6 * np.exp(-3.0*0.1) + 0.4 * np.exp(-0.3*0.1)), # t=0.1
+            1.0 * (0.6 * np.exp(-3.0*0.5) + 0.4 * np.exp(-0.3*0.5)), # t=0.5
+            1.0 * (0.6 * np.exp(-3.0*1.0) + 0.4 * np.exp(-0.3*1.0)), # t=1.0
+        ])
+        generated_concs = aif.fast_biexponential_aif(self.time_points_minutes[:4]) # Use first 4 points
+        np.testing.assert_array_almost_equal(generated_concs, expected_concs, decimal=5)
+
+        # Test with custom parameters
+        custom_params = {'D_scaler': 0.8, 'A1': 0.5, 'm1': 2.5, 'A2': 0.5, 'm2': 0.25}
+        expected_custom = np.array([
+            0.8 * (0.5 * np.exp(-2.5*0.0) + 0.5 * np.exp(-0.25*0.0)), 
+            0.8 * (0.5 * np.exp(-2.5*0.1) + 0.5 * np.exp(-0.25*0.1)),
+        ])
+        generated_custom = aif.fast_biexponential_aif(self.time_points_minutes[:2], **custom_params)
+        np.testing.assert_array_almost_equal(generated_custom, expected_custom, decimal=5)
+
 
     def test_aif_parameters_documented_and_positive(self):
         """Check AIF model parameters (non-negativity and basic doc presence)."""
-        # Parker AIF
-        self.assertTrue(aif.parker_aif.__doc__ is not None and len(aif.parker_aif.__doc__) > 20)
-        with self.assertRaises(ValueError): aif.parker_aif(self.time_points_minutes, D=-1)
-        with self.assertRaises(ValueError): aif.parker_aif(self.time_points_minutes, A1=-1)
-        # Weinmann AIF
-        self.assertTrue(aif.weinmann_aif.__doc__ is not None and len(aif.weinmann_aif.__doc__) > 20)
-        with self.assertRaises(ValueError): aif.weinmann_aif(self.time_points_minutes, D_scaler=-1)
-        with self.assertRaises(ValueError): aif.weinmann_aif(self.time_points_minutes, A1=-1)
+        for model_name, model_func in aif.POPULATION_AIFS.items():
+            with self.subTest(model=model_name):
+                self.assertTrue(model_func.__doc__ is not None and len(model_func.__doc__) > 20, f"{model_name} docstring missing or too short.")
+                # Get param names from metadata to test negative values
+                param_meta = aif.AIF_PARAMETER_METADATA.get(model_name, [])
+                if not param_meta: continue # Skip if no metadata for some reason
+                
+                first_param_name = param_meta[0][0] # e.g. D_scaler
+                test_params_negative = {first_param_name: -1.0}
+                with self.assertRaises(ValueError, msg=f"{model_name} did not raise ValueError for negative {first_param_name}"):
+                     model_func(self.time_points_minutes, **test_params_negative)
 
 
-    def test_generate_population_aif(self): # Updated to include Weinmann
-        """Test generation of population AIFs."""
-        # Test Parker AIF
+    def test_population_aifs_with_custom_params(self):
+        """Test that population AIFs use custom parameters correctly."""
+        time_points = np.array([0.5, 1.0]) # Minutes
+
+        # Parker
+        parker_default_t05 = aif.parker_aif(time_points)[0]
+        parker_custom_A1 = aif.parker_aif(time_points, A1=0.5)[0]
+        self.assertNotAlmostEqual(parker_custom_A1, parker_default_t05, 
+                                  msg="Parker AIF with custom A1 yielded same as default.")
+        # Expected: D_scaler * (0.5 * exp(-m1*t) + A2 * exp(-m2*t))
+        expected_parker_custom = 1.0 * (0.5 * np.exp(-0.171*0.5) + 0.330 * np.exp(-2.05*0.5))
+        self.assertAlmostEqual(parker_custom_A1, expected_parker_custom, decimal=5)
+
+        # Weinmann
+        weinmann_default_t05 = aif.weinmann_aif(time_points)[0]
+        weinmann_custom_m1 = aif.weinmann_aif(time_points, m1=0.2)[0]
+        self.assertNotAlmostEqual(weinmann_custom_m1, weinmann_default_t05,
+                                  msg="Weinmann AIF with custom m1 yielded same as default.")
+        expected_weinmann_custom = 1.0 * (3.99 * np.exp(-0.2*0.5) + 4.78 * np.exp(-0.0111*0.5))
+        self.assertAlmostEqual(weinmann_custom_m1, expected_weinmann_custom, decimal=5)
+
+        # Fast Bi-exponential
+        fast_default_t05 = aif.fast_biexponential_aif(time_points)[0]
+        fast_custom_D = aif.fast_biexponential_aif(time_points, D_scaler=2.0)[0]
+        self.assertNotAlmostEqual(fast_custom_D, fast_default_t05,
+                                  msg="Fast Bi-exp AIF with custom D_scaler yielded same as default.")
+        self.assertAlmostEqual(fast_custom_D, fast_default_t05 * 2.0, decimal=5)
+
+
+    def test_generate_population_aif(self): 
+        """Test generation of population AIFs, including with custom params."""
+        # Parker AIF - default
         parker_concs = aif.generate_population_aif("parker", self.time_points_minutes)
         expected_parker = aif.parker_aif(self.time_points_minutes)
         np.testing.assert_array_almost_equal(parker_concs, expected_parker)
-        # Test Weinmann AIF
-        weinmann_concs = aif.generate_population_aif("weinmann", self.time_points_minutes)
-        expected_weinmann = aif.weinmann_aif(self.time_points_minutes)
-        np.testing.assert_array_almost_equal(weinmann_concs, expected_weinmann)
+        # Weinmann AIF - with custom params
+        custom_weinmann_params = {'D_scaler': 0.75, 'A1': 3.0}
+        weinmann_concs_custom = aif.generate_population_aif("weinmann", self.time_points_minutes, params=custom_weinmann_params)
+        expected_weinmann_custom = aif.weinmann_aif(self.time_points_minutes, **custom_weinmann_params)
+        np.testing.assert_array_almost_equal(weinmann_concs_custom, expected_weinmann_custom)
 
         non_existent_aif = aif.generate_population_aif("non_existent_model", self.time_points_minutes)
         self.assertIsNone(non_existent_aif)

@@ -15,15 +15,17 @@ This tool is being developed to enable researchers and clinicians to load and ma
     *   Conversion of raw signal intensity to contrast agent concentration using user-provided r1 relaxivity, TR (Repetition Time), and number of baseline time points.
 *   **AIF Management:**
     *   Loading AIF from TXT/CSV files.
-    *   Selection of population-based AIF models (e.g., Parker, Weinmann).
+    *   Selection of population-based AIF models (e.g., Parker, Weinmann, Fast Bi-exponential).
+    *   User interface for adjusting parameters (e.g., amplitudes, rate constants) of selected population AIF models.
     *   Interactive AIF definition by drawing an ROI on the displayed image (mean signal from ROI converted to concentration).
     *   Input fields for AIF-specific parameters (T10_blood, r1_blood, AIF baseline points).
     *   Saving and loading of user-defined AIF ROI definitions (slice, position, size, reference image) to/from JSON files.
+    *   Saving of derived AIF curves (time & concentration data) to CSV/TXT files.
 *   **Pharmacokinetic Model Fitting:**
     *   Implementation of Standard Tofts model (Ktrans, ve).
     *   Implementation of Extended Tofts model (Ktrans, ve, vp).
     *   Implementation of Patlak model (Ktrans_patlak, vp_patlak).
-    *   Implementation of Two-Compartment Exchange Model (2CXM), fitting for Fp (Plasma Flow), PS (Permeability-Surface Area Product), vp (Plasma Volume), and ve (Extravascular Extracellular Space Volume). This model describes tracer exchange between plasma and EES compartments.
+    *   Implementation of Two-Compartment Exchange Model (2CXM), fitting for Fp (Plasma Flow), PS (Permeability-Surface Area Product), vp (Plasma Volume), and ve (Extravascular Extracellular Space Volume).
     *   Voxel-wise fitting of selected model to tissue concentration curves, optionally constrained by a mask.
     *   Parallelized voxel-wise pharmacokinetic model fitting using multiprocessing to leverage multiple CPU cores.
 *   **Parameter Map Generation & Export:**
@@ -35,13 +37,19 @@ This tool is being developed to enable researchers and clinicians to load and ma
     *   Interactive plotting of concentration-time curves for any selected voxel by double-clicking on the image viewer (plots tissue concentration, AIF, and the fitted model curve if available).
     *   Overlay of parameter maps: Display parameter maps semi-transparently on top of a selected anatomical base image (e.g., T1 map, Mean DCE), with controls for overlay map selection, alpha (transparency), and colormap.
 *   **ROI Analysis & Reporting:**
-    *   Tools to draw ROIs on displayed parameter maps or other images for statistical analysis.
+    *   Tools to draw multiple ROIs on displayed parameter maps or other images for statistical analysis. Each ROI is assigned a unique name and a distinct color.
     *   Calculation of basic statistics (mean, std, median, min, max, N, N_valid) for these ROIs.
-    *   Display of ROI statistics in the GUI.
-    *   Saving of ROI statistics to CSV files.
+    *   Statistics for all defined ROIs are displayed in the UI, updating dynamically based on the currently viewed map and slice. ROIs defined on other views are also listed.
+    *   Saving of statistics for all currently defined (and valid) ROIs to a single CSV file.
+*   **Output and Reporting:**
+    *   Ability to save the currently displayed AIF/Concentration/Fit plot to image files (PNG, SVG, etc.).
 *   **User Interface:**
     *   Basic Graphical User Interface (GUI) for all functionalities.
     *   Logging of operations, loaded file details, and any errors encountered.
+
+## Batch Processing
+*   Initial command-line interface (`batch_processor.py`) for processing a single dataset without the GUI.
+*   Supports specification of input files, AIF (file or population model with parameters), processing parameters, model choice, and output directory via CLI arguments.
 
 ## Technical Stack
 
@@ -89,12 +97,12 @@ Voxel-wise operations (like pharmacokinetic model fitting) can be time-consuming
 *   **More Pharmacokinetic Models:**
     *   Implementation of other models (e.g., shutter-speed model).
 *   **Improved Visualization:**
-    *   ROI drawing tools for statistics (currently a single RectROI, could be more complex shapes or multiple ROIs).
+    *   ROI drawing tools for statistics (currently RectROI, could be more complex shapes).
     *   Direct display of NIfTI files without loading into NumPy arrays first for large datasets (memory efficiency).
 *   **Batch Processing:**
-    *   Ability to process multiple datasets via a script or batch interface.
+    *   Ability to process multiple datasets via a script or batch interface (e.g., from a CSV manifest file).
 *   **Output and Reporting:**
-    *   More comprehensive export options (e.g., aggregated reports, saving plots).
+    *   More comprehensive export options (e.g., aggregated reports, saving plots from batch mode).
     *   Saving and loading of analysis "sessions" or "projects".
 
 This project aims to provide a user-friendly and modular tool for DCE-MRI analysis.
