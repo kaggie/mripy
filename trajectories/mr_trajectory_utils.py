@@ -25,6 +25,29 @@ def spiral_trajectory(num_arms, num_points, fov, dwell_time, turns=1):
         k[i, :, 1] = ky
     return k
 
+def stack_of_spirals(num_arms, num_points, num_stacks, fov, zmax, turns=1):
+    """
+    3D Stack of Spirals:
+    For each z slice, draws a spiral in the (kx, ky) plane, with kz constant for the stack.
+    Returns [num_stacks, num_arms, num_points, 3] array.
+    """
+    k = np.zeros((num_stacks, num_arms, num_points, 3))
+    z_locations = np.linspace(-zmax, zmax, num_stacks)
+    max_k = 1/(2*fov)
+    for iz, z in enumerate(z_locations):
+        for i in range(num_arms):
+            phi = 2 * np.pi * i / num_arms
+            t = np.linspace(0, 1, num_points)
+            r = t * max_k
+            theta = turns * 2 * np.pi * t + phi
+            kx = r * np.cos(theta)
+            ky = r * np.sin(theta)
+            kz = np.ones(num_points) * z
+            k[iz, i, :, 0] = kx
+            k[iz, i, :, 1] = ky
+            k[iz, i, :, 2] = kz
+    return k
+
 def stack_of_stars(num_spokes, num_points, num_stacks, fov, zmax):
     k = np.zeros((num_stacks, num_spokes, num_points, 3))
     z_locations = np.linspace(-zmax, zmax, num_stacks)
